@@ -61,14 +61,20 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo 'Release exists. Publish a new version instead of replacing assets and resetting download counts.'; exit 1
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > "$RUNNER_TEMP/is-draft" 2>/dev/null; then
+            test "$(cat "$RUNNER_TEMP/is-draft")" = true || {
+              echo 'Published release exists. Use a new version to preserve download counts.'; exit 1;
+            }
+            test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" = 0 || {
+              echo 'Draft already contains assets. Inspect it before retrying.'; exit 1;
+            }
+          else
+            gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" --notes-file build/release-notes.txt
           fi
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/SR-Mesh.apk"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$RUNNER_TEMP/SR-Mesh.apk"
           (cd "$RUNNER_TEMP" && sha256sum SR-Mesh.apk > SR-Mesh.apk.sha256)
-          gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" --notes-file build/release-notes.txt
-          release_id=$(gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq .id)
+          release_id=$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)
           gh api --method POST \
             -H 'Content-Type: application/vnd.android.package-archive' \
             --input "$RUNNER_TEMP/SR-Mesh.apk" \
