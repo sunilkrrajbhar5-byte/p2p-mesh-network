@@ -16,7 +16,7 @@ test('Pages shows download portal without starting gateway APIs or sockets',()=>
   const {element}=portal(); // No fetch/WebSocket/navigator supplied: any gateway access would throw.
   assert.equal(element('githubPortal').hidden,false);
   assert.equal(element('localClient').hidden,true);
-  assert.match(page,/releases\/latest\/download\/app-debug\.apk/);
+  assert.match(page,/releases\/latest\/download\/SR-Mesh\.apk/);
 });
 test('gateway launcher accepts HTTPS origins and rejects credentials/plaintext',()=>{
   const {element,location}=portal();

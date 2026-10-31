@@ -42,6 +42,11 @@ android {
             }
         }
     }
+    buildTypes.getByName("release") {
+        // Reuse the stable installed-app signer for upgrade compatibility.
+        signingConfig = signingConfigs.getByName("debug")
+        isDebuggable = false
+    }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_1_8; targetCompatibility = JavaVersion.VERSION_1_8 }
     kotlinOptions { jvmTarget = "1.8" }

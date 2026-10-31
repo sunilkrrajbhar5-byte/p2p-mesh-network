@@ -13,7 +13,7 @@ assert re.fullmatch(r'v\d+\.\d+\.\d+', tag), 'Use a stable vMAJOR.MINOR.PATCH ta
 assert tag == 'v' + config['latestVersionName'], 'Tag and config version must match'
 assert type(config['latestVersionCode']) is int and 0 < config['latestVersionCode'] <= 2147483647
 assert type(config['forceUpdate']) is bool
-assert config['apkDownloadUrl'] == 'https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/releases/latest/download/app-debug.apk'
+assert config['apkDownloadUrl'] == 'https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/releases/latest/download/SR-Mesh.apk'
 assert config['webClientUrl'] == 'https://sunilkrrajbhar5-byte.github.io/p2p-mesh-network/'
 assert isinstance(config['releaseNotes'], str) and len(config['releaseNotes']) <= 16384
 if os.environ.get('GITHUB_ACTIONS') == 'true':

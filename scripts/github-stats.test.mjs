@@ -8,7 +8,7 @@ test('counts only APK assets across paginated releases and assets',async()=>{
     [base+'/releases?per_page=100&page=2',[[{id:2,tag_name:'v2.0.0'},{id:3,draft:true}],null]],
     [base+'/releases/1/assets?per_page=100',[[{name:'app-debug.apk',download_count:4},{name:'desktop.zip',download_count:50}],base+'/releases/1/assets?page=2']],
     [base+'/releases/1/assets?page=2',[[{name:'app-debug.apk.sha256',download_count:70}],null]],
-    [base+'/releases/2/assets?per_page=100',[[{name:'app-debug.apk',download_count:9}],null]]
+    [base+'/releases/2/assets?per_page=100',[[{name:'SR-Mesh.apk',download_count:9}],null]]
   ]);
   const result=await readDownloads(async url=>{assert.ok(data.has(url));const[body,next]=data.get(url);return new Response(JSON.stringify(body),{headers:next?{link:`<${next}>; rel="next"`}:{}});});
   assert.equal(result.total,13);assert.equal(result.rows.length,2);

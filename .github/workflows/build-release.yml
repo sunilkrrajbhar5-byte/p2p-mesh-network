@@ -54,7 +54,7 @@ jobs:
           MESH_KEYSTORE_PASSWORD: ${{ secrets.MESH_KEYSTORE_PASSWORD }}
           MESH_KEY_ALIAS: ${{ secrets.MESH_KEY_ALIAS }}
           MESH_KEY_PASSWORD: ${{ secrets.MESH_KEY_PASSWORD }}
-        run: bash ./gradlew --no-daemon :app:assembleDebug
+        run: bash ./gradlew --no-daemon :app:assembleRelease
       - name: Publish a new release without replacing counted assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,10 +64,17 @@ jobs:
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo 'Release exists. Publish a new version instead of replacing assets and resetting download counts.'; exit 1
           fi
-          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/app-debug.apk"
-          (cd "$RUNNER_TEMP" && sha256sum app-debug.apk > app-debug.apk.sha256)
-          gh release create "$RELEASE_TAG" "$RUNNER_TEMP/app-debug.apk" "$RUNNER_TEMP/app-debug.apk.sha256" \
-            --verify-tag --title "$RELEASE_TAG" --notes-file build/release-notes.txt --latest
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/SR-Mesh.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$RUNNER_TEMP/SR-Mesh.apk"
+          (cd "$RUNNER_TEMP" && sha256sum SR-Mesh.apk > SR-Mesh.apk.sha256)
+          gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" --notes-file build/release-notes.txt
+          release_id=$(gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq .id)
+          gh api --method POST \
+            -H 'Content-Type: application/vnd.android.package-archive' \
+            --input "$RUNNER_TEMP/SR-Mesh.apk" \
+            "https://uploads.github.com/repos/$GH_REPO/releases/$release_id/assets?name=SR-Mesh.apk" --silent
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/SR-Mesh.apk.sha256"
+          gh release edit "$RELEASE_TAG" --draft=false --latest
       - name: Remove signing material
         if: always()
         run: rm -f -- "$RUNNER_TEMP/mesh-signing.jks"

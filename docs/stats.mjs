@@ -27,7 +27,7 @@ export async function readDownloads(fetcher = fetch, signal) {
     if (release.draft) continue;
     const assets = await pages('/releases/' + encodeURIComponent(release.id) + '/assets');
     for (const asset of assets) {
-      if (asset.name === 'app-debug.apk' && Number.isSafeInteger(asset.download_count) && asset.download_count >= 0) {
+      if (['app-debug.apk', 'SR-Mesh.apk'].includes(asset.name) && Number.isSafeInteger(asset.download_count) && asset.download_count >= 0) {
         rows.push({tag:release.tag_name,downloads:asset.download_count});
       }
     }
