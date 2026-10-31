@@ -1,0 +1,65 @@
+SR MESH: PIN-FREE DIRECT-PEER CONSENT
+
+APPLICATION WIRING
+MainActivity -> ProfileOnboardingScreen(identity) -> NearbyDevicesScreen -> MeshEngine.
+The onboarding callback now takes ONE argument. No Group PIN was previously saved,
+so there is no stored Group PIN to migrate in this repository. Neither variant of
+DynamicConfigManager filters discovery or authenticates mesh connections. Their
+Admin PIN remains intact; removing it would weaken a separate settings control.
+
+DNS-SD
+WifiDirectManager advertises srmesh._srmesh._tcp with identity, cluster UUID and
+consent=1. NearbyDevicesScreen lists discovered identities; tapping a host stops
+the local host and joins the selected host. Existing connections must be closed
+before changing hosts. Android Wi-Fi association/WPS approval may precede app
+consent. Hotspot OS credentials are transport credentials, not a Group PIN.
+Local-only-hotspot fallback still needs the existing invitation flow; automatic
+identity discovery here is Wi-Fi Direct DNS-SD, not hotspot scanning.
+
+CONNECTION HANDSHAKE
+The existing MeshPacket/CRC framing is reused. A client sends a one-hop HEARTBEAT
+with payload byte 67 (consent-capable hello). Before membership/routes are added,
+the owner awaits a PeerConsentController decision. Accept sends the existing
+one-byte role welcome. Reject/timeout sends HEARTBEAT payload byte 127, flushes
+and closes the provisional TCP socket. The client raises RequestDeclinedException
+and displays Request Declined without retrying the rejected peer via fallback.
+Old empty-hello peers fail closed: update both endpoints together.
+
+FILE HANDSHAKE
+The existing PRE_ALERT carries the real display filename, size and SHA-256.
+MeshEngine observes the reverse ACK route then asks before invoking ChunkManager.
+No receiver cache file is created before Accept. Accept lets ChunkManager perform
+its size/storage checks and send READY; the sender waits for READY before chunks.
+Reject uses the existing REJECTED DELIVERY_ACK then disconnects the session.
+Completion still requires SHA-256 verification and VERIFIED ACK. Sender URI copies
+use app-private cache with a bounded 512 KiB buffer; these are not relay writes.
+
+VOICE HANDSHAKE
+PacketType wire codes 6 and 7 are CONSENT_REQUEST and CONSENT_RESPONSE. Each has a
+17-byte payload: UUID (16 bytes) + decision (0/1). REQUEST always carries 0 and is
+for a new voice stream UUID. The sender awaits a correlated response bound to the
+same session and identity before AudioRecord starts. Receiver playback requires
+that stream's accepted grant; grants expire after 90 seconds and on disconnect.
+Release while waiting cancels the request; reject sends a response then disconnects.
+This UI uses unicast voice: broadcast voice cannot bypass individual approval.
+
+LIFECYCLE AND LIMITS
+Consent is memory-only, single-use, bounded to four pending requests and a 40-second
+UI deadline. Socket handshake timeout is 50 seconds. Socket reads/heartbeats do not
+wait on file or voice UI decisions. Leaving RESUMED declines pending/new requests;
+this Activity-owned implementation does not pop background full-screen activities.
+A foreground-service notification workflow would be a separate integration.
+The new screen coordinates direct peers; existing multi-hop relay and browser
+admission remain separate integrations. A RelayService host must supply and expose
+its manager's PeerConsentController; its default denies when no visible UI exists.
+Existing gateway access keys and Admin PINs are not Group PINs and remain unchanged.
+Identity labels are peer claims, not cryptographic proof. CRC is not encryption.
+
+VALIDATION
+ConsentChecks.kt exercises approval, rejection, unknown IDs, repeat decisions,
+background denial, timeout, capacity, coroutine cancellation and control payloads.
+Step4Checks verifies SHA/ACK/priority/large offsets and transfer through a RAM relay.
+Step5Checks, Step6Checks and MeshPacketChecks cover voice wire/UI models/framing.
+Kotlin/Compose compilation uses the repository's cached Android/AndroidX toolchain.
+Real Wi-Fi Direct behavior and OS prompts require two physical Android devices.
+No release tag or APK version was changed by this source refactor.

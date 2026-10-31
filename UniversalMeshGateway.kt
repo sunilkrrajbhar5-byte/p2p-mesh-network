@@ -77,6 +77,7 @@ class UniversalMeshGateway(
         check(!stopped.get())
         relay.attachBridge(this)
         try { start(30_000, true) } catch (e: Exception) { relay.detachBridge(this); throw e }
+        GatewayLinkState.started(this)
         scope.launch {
             while (isActive) {
                 delay(3_000)
@@ -420,6 +421,7 @@ class UniversalMeshGateway(
     }
     suspend fun shutdown() {
         if (!stopped.compareAndSet(false, true)) return
+        GatewayLinkState.stopped(this)
         relay.detachBridge(this); stop(); runner.closeAll()
         withContext(NonCancellable + Dispatchers.IO) { clients.values.toList().forEach { remove(it) } }
         root.cancelAndJoin(); timers.shutdownNow()

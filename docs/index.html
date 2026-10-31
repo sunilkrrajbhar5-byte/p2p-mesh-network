@@ -51,6 +51,7 @@ html{scroll-behavior:smooth;scroll-padding-top:96px}body{max-width:none;padding:
 #githubPortal .footer-inner>a{display:block;width:100%}
 @media(max-width:1000px){#githubPortal .features{grid-template-columns:1fr}#githubPortal .desktop-nav{gap:16px}#githubPortal .desktop-nav a{font-size:12px}}
 @media(max-width:760px){#githubPortal .desktop-nav{display:none}#githubPortal .mobile-menu{display:block;margin-left:auto}#githubPortal .mobile-menu summary{cursor:pointer;list-style:none;font-size:29px;color:#dff7ff;padding:8px;line-height:1}#githubPortal .mobile-menu summary::-webkit-details-marker{display:none}#githubPortal .mobile-menu nav{position:absolute;z-index:5;top:100%;left:0;right:0;display:flex;flex-direction:column;align-items:stretch;gap:0;padding:8px 16px;background:#0d1c2e;border:1px solid #28566b;border-radius:12px}#githubPortal .mobile-menu nav a{padding:13px 8px;font-size:16px;border-bottom:1px solid #73d7ff15}#githubPortal .header-inner{flex-wrap:nowrap}#githubPortal .hero{grid-template-columns:1fr;text-align:center;padding:32px 0}#githubPortal .eyebrow{justify-content:center;font-size:10px;letter-spacing:1.8px}#githubPortal h1{font-size:clamp(40px,10vw,64px);margin:20px 0 10px}#githubPortal .hindi-tagline{font-size:28px}#githubPortal .subtitle{font-size:15px}#githubPortal .mesh-art{max-width:270px;justify-self:center;width:75%}#githubPortal .hero-actions{grid-template-columns:1fr;width:100%;margin-top:0}#githubPortal .hero-actions .button strong{font-size:20px}#githubPortal .hero-actions .button{font-size:18px;padding:17px}#githubPortal .offline-note{font-size:14px}#githubPortal .features{gap:12px}#githubPortal .feature{padding:18px;gap:14px}#githubPortal .feature-icon{margin:0;width:42px;height:42px;font-size:22px}#githubPortal h3{font-size:16px}#githubPortal .feature p{font-size:15px}#githubPortal .platforms{grid-template-columns:1fr}#githubPortal .gateway-card{padding:20px}#githubPortal #gateway-title{font-size:28px}#githubPortal .section-label{font-size:11px;letter-spacing:1.5px}#githubPortal .gateway-steps{font-size:16px}#githubPortal .footer-inner{font-size:12px}}
+#githubPortal .gateway-tools{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}#githubPortal .gateway-tools .button{flex:1;font-size:14px;white-space:normal}#gatewayScanner{background:#0c1b2b;color:#eef8ff;border:1px solid #38bdf8;border-radius:16px;width:min(480px,calc(100% - 32px));padding:24px}#gatewayScanner::backdrop{background:#000b}#gatewayVideo{display:block;width:100%;max-height:45vh;background:#000;border-radius:8px}#gatewayScanner p{line-height:1.7}
 </style></head><body><div id="githubPortal" hidden>
 <a class="skip-link" href="#home">Skip to content</a>
 <header class="header"><div class="wrap header-inner">
@@ -67,7 +68,7 @@ html{scroll-behavior:smooth;scroll-padding-top:96px}body{max-width:none;padding:
 <a class="glass platform" href="#gateway"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M13 6c0-3 2-4 4-4 0 3-2 4-4 4Zm-1 2c-6-4-11 3-7 10 3 6 5 2 7 3 3-2 5 3 8-5-4-2-4-5-1-7-3-4-5-1-7-1Z"/></svg><strong>Apple iOS &amp; Mac (Web Client)</strong><small><span lang="hi">इंस्टॉल किए बिना · Browser में खोलें</span></small><span class="platform-link">Connect to a gateway →</span></a>
 <a class="glass platform" href="#gateway"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M12 17v4m-5 0h10M8 8l-2 2 2 2m8-4 2 2-2 2"/></svg><strong>Windows &amp; Linux (Desktop Client)</strong><small><span lang="hi">अपने desktop host या web gateway से जुड़ें</span></small><span class="platform-link">Open browser client →</span></a>
 </div></section>
-<section id="gateway" class="gateway-section" aria-labelledby="gateway-title"><div class="glass gateway-card"><div><div class="section-label">CONNECT TO NEARBY GATEWAY</div><h2 id="gateway-title" lang="hi">लोकल गेटवे से जुड़ें</h2><p class="gateway-steps" lang="hi"><span>① Host की Wi-Fi से जुड़ें</span><span>② गेटवे एड्रेस डालें</span></p></div><div><form id="gatewayForm"><label for="gatewayUrl">Gateway address / <span lang="hi">गेटवे एड्रेस</span></label><p class="input-instruction">Enter your gateway address below / <span lang="hi">नीचे गेटवे एड्रेस डालें:</span></p><div class="gateway-controls"><input id="gatewayUrl" type="url" placeholder="https://gateway-address:8443/" required aria-describedby="gatewayHelp gatewayError" autocomplete="url" spellcheck="false"><button class="button primary" type="submit">Launch Web Client <span lang="hi">(शुरू करें)</span></button></div></form><p id="gatewayError" role="status" aria-live="polite"></p><details class="gateway-details"><summary lang="hi">गेटवे एड्रेस कहाँ मिलेगा?</summary><p lang="hi">होस्ट चलाने वाले व्यक्ति से उसका HTTPS गेटवे एड्रेस लें और यहाँ डालें। दोनों डिवाइस उसी host की Wi-Fi पर होने चाहिए।</p></details><p id="gatewayHelp" class="gateway-help" lang="hi">गेटवे का HTTPS प्रमाणपत्र आपके डिवाइस पर trusted होना चाहिए। Voice और file transfer के दौरान गेटवे पेज खुला रखें।</p></div></div></section>
+<section id="gateway" class="gateway-section" aria-labelledby="gateway-title"><div class="glass gateway-card"><div><div class="section-label">CONNECT TO NEARBY GATEWAY</div><h2 id="gateway-title" lang="hi">लोकल गेटवे से जुड़ें</h2><p class="gateway-steps" lang="hi"><span>① Host की Wi-Fi से जुड़ें</span><span>② गेटवे एड्रेस डालें</span></p></div><div><form id="gatewayForm"><label for="gatewayUrl">Gateway address / <span lang="hi">गेटवे एड्रेस</span></label><p class="input-instruction">Enter your gateway address below / <span lang="hi">नीचे गेटवे एड्रेस डालें:</span></p><div class="gateway-controls"><input id="gatewayUrl" type="url" placeholder="https://gateway-address:8443/" required aria-describedby="gatewayHelp gatewayError" autocomplete="url" spellcheck="false"><button class="button primary" type="submit">Launch Web Client <span lang="hi">(शुरू करें)</span></button></div></form><div class="gateway-tools"><button id="pasteGateway" type="button" class="button">📋 Paste &amp; Connect</button><button id="scanGateway" type="button" class="button">📷 Scan Gateway QR</button></div><dialog id="gatewayScanner" aria-labelledby="scannerTitle"><h2 id="scannerTitle">Scan Gateway QR / QR स्कैन करें</h2><p>Host की Wi-Fi से जुड़ें और उसके QR code पर camera रखें।</p><video id="gatewayVideo" autoplay muted playsinline></video><p id="scannerStatus" role="status"></p><button id="closeGatewayScanner" type="button" class="button">Close / बंद करें</button></dialog><p id="gatewayError" role="status" aria-live="polite"></p><details class="gateway-details"><summary lang="hi">गेटवे एड्रेस कहाँ मिलेगा?</summary><p lang="hi">होस्ट चलाने वाले व्यक्ति से उसका HTTPS गेटवे एड्रेस लें और यहाँ डालें। दोनों डिवाइस उसी host की Wi-Fi पर होने चाहिए।</p></details><p id="gatewayHelp" class="gateway-help" lang="hi">गेटवे का HTTPS प्रमाणपत्र आपके डिवाइस पर trusted होना चाहिए। Voice और file transfer के दौरान गेटवे पेज खुला रखें।</p></div></div></section>
 </main><footer class="footer"><div class="wrap footer-inner"><span>SR MESH • Hosted on GitHub Pages • sunilkrrajbhar5-byte</span><a href="./dashboard.html">Download counts / <span lang="hi">डाउनलोड की संख्या</span> ↗</a></div></footer></div><div id="localClient">
 <h1>Offline Mesh</h1><small>Nearby chat, files and push-to-talk</small><p id="status" role="status" aria-live="polite">Join the host's Wi-Fi network, then connect below.</p>
 <section id="join"><h2>Your profile</h2><label>Nickname<input id="nickname" maxlength="64" autocomplete="nickname"></label><p id="identity"></p>
@@ -123,4 +124,63 @@ function queueVoice(buffer){if(talking||!audio||audio.state!=='running'||buffer.
 async function playQueued(){if(decoding)return;decoding=true;try{while(voiceQueue.length){const item=voiceQueue.shift();if(performance.now()-item.at>200)continue;try{const pcm=await audio.decodeAudioData(item.data);if(talking||performance.now()-item.at>300)continue;if(nextPlay>audio.currentTime+.25){for(const source of sources){try{source.stop();}catch{}}sources.clear();nextPlay=audio.currentTime+.02;}const source=audio.createBufferSource();source.buffer=pcm;source.connect(audio.destination);sources.add(source);source.onended=()=>sources.delete(source);nextPlay=Math.max(nextPlay,audio.currentTime+.02);source.start(nextPlay);nextPlay+=pcm.duration;}catch{$('voiceHint').textContent='This browser cannot decode the received audio format. Use a current browser or the native Android app.';}}}finally{decoding=false;}}
 if(isSecureContext&&'serviceWorker'in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>status('PWA setup unavailable; the browser client still works while connected.'));navigator.serviceWorker.addEventListener('message',event=>{const d=event.data;if(d.type==='downloadProgress'){$('downloadProgress').value=d.total?d.bytes/d.total:1;$('downloadStatus').textContent='Streamed to browser download: '+bytes(d.bytes)+' / '+bytes(d.total);}});}
 }
+</script><script>
+(() => {
+ 'use strict';
+ if(location.hostname!=='sunilkrrajbhar5-byte.github.io') return;
+ const input=document.getElementById('gatewayUrl'), form=document.getElementById('gatewayForm');
+ const message=document.getElementById('gatewayError'), dialog=document.getElementById('gatewayScanner');
+ const video=document.getElementById('gatewayVideo'), scanStatus=document.getElementById('scannerStatus');
+ const paste=document.getElementById('pasteGateway');
+ let stream=null, timer=null, generation=0;
+ function stopCamera(){generation++;clearTimeout(timer);timer=null;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;}
+ function connect(value){
+   const text=String(value).trim();
+   if(!text||text.length>2048){message.textContent='Valid gateway URL नहीं मिला।';return false;}
+   input.value=text;
+   // Reuse the original HTTPS-origin, credential and path validation.
+   form.requestSubmit();
+   return true;
+ }
+ paste.onclick=async()=>{
+   paste.disabled=true;message.textContent='';
+   try{
+     if(!navigator.clipboard?.readText)throw Error('Clipboard unavailable');
+     connect(await navigator.clipboard.readText());
+   }catch{message.textContent='Clipboard access नहीं मिला। एड्रेस field को दबाकर Paste करें।';input.focus();}
+   finally{paste.disabled=false;}
+ };
+ document.getElementById('closeGatewayScanner').onclick=()=>dialog.close();
+ dialog.addEventListener('close',stopCamera);
+ dialog.addEventListener('cancel',stopCamera);
+ window.addEventListener('pagehide',stopCamera);
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){stopCamera();if(dialog.open)dialog.close();}});
+ document.getElementById('scanGateway').onclick=async()=>{
+   stopCamera();const token=generation;
+   dialog.showModal();scanStatus.textContent='Camera तैयार हो रहा है…';video.hidden=true;
+   try{
+     if(!window.BarcodeDetector||!navigator.mediaDevices?.getUserMedia ||
+       !(await BarcodeDetector.getSupportedFormats()).includes('qr_code')){
+       scanStatus.textContent='इस browser में QR scanning उपलब्ध नहीं है। फोन का Camera / Google Lens खोलकर host का QR scan करें और उसका HTTPS link खोलें। या link copy करके यहाँ Paste & Connect करें।';return;
+     }
+     if(token!==generation||!dialog.open)return;
+     const detector=new BarcodeDetector({formats:['qr_code']});
+     const acquired=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:640}},audio:false});
+     if(token!==generation||!dialog.open){acquired.getTracks().forEach(t=>t.stop());return;}
+     stream=acquired;video.srcObject=stream;video.hidden=false;await video.play();
+     scanStatus.textContent='QR code को camera के सामने रखें।';
+     async function scan(){
+       if(token!==generation||!dialog.open)return;
+       try{
+         const results=await detector.detect(video);
+         if(token!==generation||!dialog.open)return;
+         const found=results.find(result=>result.format==='qr_code' && result.rawValue);
+         if(found){stopCamera();dialog.close();connect(found.rawValue);return;}
+       }catch{ /* A video frame may not be ready yet. */ }
+       if(token===generation)timer=setTimeout(scan,250);
+     }
+     scan();
+   }catch{if(token===generation){stopCamera();scanStatus.textContent='Camera access नहीं मिला। फोन के Camera से QR scan करें या gateway link paste करें।';}}
+ };
+})();
 </script></body></html>

@@ -37,7 +37,9 @@ class PttVoiceEngine(
     private val owner: LifecycleOwner,
     private val localId: String,
     private val clusterId: UUID,
-    private val sendFast: suspend (MeshPacket) -> Unit
+    private val sendFast: suspend (MeshPacket) -> Unit,
+    private val authorizeVoice: suspend (String, UUID) -> Boolean = { _, _ -> false },
+    private val mayPlayVoice: (String, UUID) -> Boolean = { _, _ -> false }
 ) : Closeable {
     private val app = context.applicationContext
     private val root = SupervisorJob()
@@ -122,12 +124,17 @@ class PttVoiceEngine(
         if (header.targetId != null && header.targetId != MeshPacket.BROADCAST && header.targetId != localId) return true
         try {
             val frame = VoiceFrame.decode(payload)
+            if (!mayPlayVoice(header.senderId, frame.streamId)) { frame.audio.fill(0); return true }
             if (!incoming.trySend(Incoming(header.senderId, now(), frame)).isSuccess) frame.audio.fill(0)
         } catch (_: IllegalArgumentException) { /* Malformed voice payload: discard. */ }
         return true
     }
 
     private suspend fun capture(token: Long, targetId: String?) {
+        require(targetId != null && MeshPacket.isValidIdentity(targetId)) { "Select one peer for voice consent" }
+        val stream = UUID.randomUUID()
+        if (!authorizeVoice(targetId, stream)) throw RequestDeclinedException()
+        currentCoroutineContext().ensureActive()
         val minimum = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         check(minimum > 0) { "16 kHz recording unavailable" }
         val record = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, RATE,
@@ -141,7 +148,6 @@ class PttVoiceEngine(
             encoder.start()
             record.startRecording()
             check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING)
-            val stream = UUID.randomUUID()
             var sequence = 0
             var samples = 0L
             var firstPts: Long? = null

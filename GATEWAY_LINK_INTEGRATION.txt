@@ -1,0 +1,30 @@
+GATEWAY LINK / QR WORKFLOW
+
+Android
+- UniversalMeshGateway.startGateway publishes its exact configured HTTPS origin only
+  after the socket listener starts. shutdown removes that instance's publication.
+- NearbyDevicesScreen shows ActiveGatewayCard(identity). Copy uses Android Clipboard;
+  Share / QR opens a locally generated QR and a Share Link button (ACTION_SEND text/plain).
+- QR contains only the origin URL, never joinSecret or credentials. A device scanning
+  it must already join the host Wi-Fi and trust its HTTPS certificate.
+- ZXing core 3.5.3 is bundled at build time; no QR API/network service is used.
+- The current native MeshEngine does not construct a TLS gateway. Existing host
+  integration must start UniversalMeshGateway with its trusted certificate, relay
+  and configured reachable origin. This change exposes that lifecycle, not a fake IP.
+
+Web
+- Paste & Connect reads the clipboard only on a user click, fills the input and
+  invokes the existing validated gateway form. Permission denial retains manual paste.
+- Scan Gateway QR uses native BarcodeDetector when qr_code is supported. Otherwise
+  it explains using the phone Camera/Google Lens; no CDN or scanner package is loaded.
+- Camera tracks stop on success, close, pagehide and visibility loss, including a
+  late camera permission resolution after cancellation. Audio is never requested.
+- QR and pasted URLs use the same HTTPS-origin checks as typed URLs.
+
+Validation
+- 10 Node tests: original portal/stats plus paste, denied clipboard, unsupported QR,
+  scan success/camera cleanup and delayed-permission cancellation.
+- GatewayQrChecks: generated QR decoded to exact IPv4, hostname and IPv6 URLs;
+  rejects HTTP, credentials, paths and fragments.
+- Kotlin/Compose sources compiled using the cached Android/AndroidX toolchain.
+- No physical-device camera/clipboard/share-sheet test or new APK release performed.

@@ -43,7 +43,7 @@ class MeshApplication : Application() {
     }
 }
 
-/** Integration launcher: existing mesh engines remain unmodified and require host session wiring. */
+/** PIN-free onboarding, nearby discovery and per-peer consent. */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,15 +60,15 @@ class MainActivity : ComponentActivity() {
                         if (error != null) Button(onClick = app::initialize) { Text("Retry") }
                     } else {
                         val config by remote.config.state.collectAsStateWithLifecycle()
-                        ProfileOnboardingScreen(onContinue = { identity, _ -> savedProfile = identity }, remoteControls = {
-                            Text("GitHub distribution integration", style = MaterialTheme.typography.titleMedium)
-                            Text("Onboarding and updates are connected. Mesh session navigation still needs application integration.")
+                        val controlsUi: @Composable () -> Unit = {
                             RemoteVersionControl(remote.config, remote.updates)
                             TextButton(onClick = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(config.effective.webClientUrl))) }) {
                                 Text("Open web client / downloads")
                             }
-                            savedProfile?.let { Text("Profile saved: $it") }
-                        })
+                        }
+                        val profile = savedProfile
+                        if (profile == null) ProfileOnboardingScreen(onContinue = { savedProfile = it }, remoteControls = controlsUi)
+                        else NearbyDevicesScreen(profile, controlsUi)
                         RemoteUpdateDialog(remote.updates)
                     }
                 }

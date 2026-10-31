@@ -94,15 +94,16 @@ class ChunkManager(
     suspend fun sendFile(
         source: File, targetId: String, clusterId: UUID,
         readyTimeoutMs: Long = 60_000, deliveryTimeoutMs: Long = 120_000,
+        displayName: String = source.name,
         onProgress: (sentBytes: Long, totalBytes: Long) -> Unit = { _, _ -> }
     ): UUID {
-        val task = scope.async { sendFileInternal(source, targetId, clusterId, readyTimeoutMs, deliveryTimeoutMs, onProgress) }
+        val task = scope.async { sendFileInternal(source, targetId, clusterId, readyTimeoutMs, deliveryTimeoutMs, displayName, onProgress) }
         try { return task.await() } finally { if (!task.isCompleted) task.cancel() }
     }
 
     private suspend fun sendFileInternal(
         source: File, targetId: String, clusterId: UUID, readyTimeoutMs: Long, deliveryTimeoutMs: Long,
-        onProgress: (Long, Long) -> Unit
+        displayName: String, onProgress: (Long, Long) -> Unit
     ): UUID = senderLock.withLock {
         withContext(Dispatchers.IO) {
             check(!closed)
@@ -112,7 +113,7 @@ class ChunkManager(
                 require(size <= maxFileBytes) { "File exceeds transfer policy" }
                 onProgress(0L, size) // IO thread; consumer must be fast and nonblocking.
                 val block = ByteBuffer.allocate(CHUNK_BYTES)
-                val metadata = Metadata(UUID.randomUUID(), size, source.name, hash(channel, size, block))
+                val metadata = Metadata(UUID.randomUUID(), size, displayName, hash(channel, size, block))
                 val ticket = acknowledgements.register(metadata, targetId, clusterId)
                 try {
                     sendPacket(MeshPacket(PacketType.PRE_ALERT, localId, clusterId,

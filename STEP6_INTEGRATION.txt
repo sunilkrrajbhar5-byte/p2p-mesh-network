@@ -56,27 +56,15 @@ Use a MaterialTheme colorScheme appropriate for your app; all screens support
 its light/dark colors. They apply safe-drawing/IME insets themselves, so avoid
 also applying the same insets in the host Scaffold content.
 
-ONBOARDING
-ProfileOnboardingScreen(onContinue = { identity, pin ->
-    // Invoke your group-admission flow, then navigate to the radar/chat.
-    // Do NOT log pin or put it in a navigation route, Bundle or SavedStateHandle.
+ONBOARDING (UPDATED: EXPLICIT PEER CONSENT)
+ProfileOnboardingScreen(onContinue = { identity ->
+    // Navigate to NearbyDevicesScreen(identity).
 })
 
-The persisted identity loads on IO. On first use, Create profile commits a
-SecureRandom six-digit suffix through IdentityGenerator. A recomposition or
-nickname edit never rotates the identity. Only the persisted full identity is
-displayed as an ID; there is no fake preview suffix. Existing profiles are shown
-automatically; passing initialIdentity skips the initial load when already known.
-Nickname persistence errors are surfaced instead of falling back to plaintext.
-
-The six-digit Group PIN is password-masked and kept only in ordinary in-memory
-Compose state (not rememberSaveable). The callback receives it once per explicit
-Continue attempt; clear it from host state after admission. Java/Kotlin Strings
-are immutable, so this is not a promise of cryptographic memory erasure.
-IMPORTANT: the current mesh handshake has no group-PIN authentication. This
-screen collects the PIN for your host admission callback; it does not enforce
-membership or encrypt the transport. Do not present a PIN-protected connection
-as implemented until the admission protocol is implemented and tested.
+The persisted identity loads on IO. No Group PIN input, validation or persistence
+is used. The launcher now opens NearbyDevicesScreen and its MeshEngine.
+See CONSENT_INTEGRATION.txt for the connection, voice and file approval protocol.
+The hidden Admin PIN still protects remote configuration; it is unrelated to peers.
 
 Nearby Wi-Fi permission is required to Continue; microphone, camera and
 notification permissions are optional and requested individually on button taps.

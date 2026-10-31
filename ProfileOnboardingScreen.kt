@@ -11,15 +11,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -29,14 +26,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * Group PIN is handed to the host, never saved in preferences/saved-instance-state.
- * The host implements group admission; collecting a PIN alone does not secure the transport.
- * initialIdentity should be supplied when an existing profile has already been loaded.
- */
+/** PIN-free profile creation. Admission is handled by explicit peer consent. */
 @Composable
 fun ProfileOnboardingScreen(
-    onContinue: suspend (identity: String, groupPin: String) -> Unit,
+    onContinue: suspend (identity: String) -> Unit,
     modifier: Modifier = Modifier,
     initialIdentity: String? = null,
     remoteControls: (@Composable () -> Unit)? = null
@@ -49,7 +42,6 @@ fun ProfileOnboardingScreen(
     val scope = rememberCoroutineScope()
     var nickname by rememberSaveable { mutableStateOf("") }
     var identity by rememberSaveable(initialIdentity) { mutableStateOf(initialIdentity) }
-    var pin by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(initialIdentity == null) }
     var error by remember { mutableStateOf<String?>(null) }
     var permissionRevision by remember { mutableIntStateOf(0) }
@@ -115,11 +107,6 @@ fun ProfileOnboardingScreen(
                 }
             }
         }
-        OutlinedTextField(pin, { value -> pin = value.filter { it in '0'..'9' }.take(6) },
-            modifier = Modifier.fillMaxWidth(), label = { Text("Group PIN") }, singleLine = true,
-            enabled = !busy, visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-            supportingText = { Text("Enter the six-digit PIN shared by your group.") })
         HorizontalDivider()
         Text("Permissions", style = MaterialTheme.typography.titleMedium)
         PermissionRow(if (Build.VERSION.SDK_INT >= 33) "Nearby devices" else "Nearby discovery location",
@@ -146,15 +133,14 @@ fun ProfileOnboardingScreen(
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Button(onClick = {
             val id = identity ?: return@Button
-            val enteredPin = pin
             busy = true; error = null
             scope.launch {
-                try { onContinue(id, enteredPin); pin = "" }
+                try { onContinue(id) }
                 catch (e: CancellationException) { throw e }
-                catch (_: Exception) { error = "Could not join the group. Please try again." }
+                catch (_: Exception) { error = "Could not open nearby devices. Please try again." }
                 finally { busy = false }
             }
-        }, enabled = identity != null && pin.length == 6 && canNetwork && !busy,
+        }, enabled = identity != null && canNetwork && !busy,
             modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait…" else "Continue") }
     }
 }

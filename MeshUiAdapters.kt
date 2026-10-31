@@ -44,13 +44,14 @@ suspend fun sendChatFile(
     clusterId: UUID,
     chunks: ChunkManager,
     requestId: UUID = UUID.randomUUID(),
+    displayName: String = source.name,
     onState: (FileTransferUi) -> Unit
 ): UUID = withContext(Dispatchers.IO) {
-    var state = FileTransferUi(requestId, source.name, 0, null, FileTransferPhase.PREPARING)
+    var state = FileTransferUi(requestId, displayName, 0, null, FileTransferPhase.PREPARING)
     fun publish(phase: FileTransferPhase) { state = state.copy(phase = phase); onState(state) }
     try {
         onState(state)
-        val transferId = chunks.sendFile(source, targetId, clusterId, onProgress = { sent, total ->
+        val transferId = chunks.sendFile(source, targetId, clusterId, displayName = displayName, onProgress = { sent, total ->
             state = state.copy(sentBytes = sent, totalBytes = total)
             publish(when {
                 total == 0L || sent == total -> FileTransferPhase.VERIFYING

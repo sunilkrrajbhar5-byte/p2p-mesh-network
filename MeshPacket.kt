@@ -11,7 +11,7 @@ import java.util.zip.CRC32
 
 /** Explicit wire codes: never serialize enum ordinals. */
 enum class PacketType(val wireCode: Int) {
-    HEARTBEAT(0), TEXT(1), PTT_VOICE(2), MEDIA_CHUNK(3), PRE_ALERT(4), DELIVERY_ACK(5);
+    HEARTBEAT(0), TEXT(1), PTT_VOICE(2), MEDIA_CHUNK(3), PRE_ALERT(4), DELIVERY_ACK(5), CONSENT_REQUEST(6), CONSENT_RESPONSE(7);
 
     companion object {
         fun fromWireCode(code: Int): PacketType = values().firstOrNull { it.wireCode == code }

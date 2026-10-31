@@ -136,3 +136,7 @@ gateway transports are unchanged. Gradle 8.11.1 wrapper scripts/JAR are distribu
 under Apache-2.0; wrapper source: https://github.com/gradle/gradle/tree/v8.11.1 .
 The wrapper JAR and distribution are checksum-verified. Android dependencies retain
 their upstream licenses; include their notices when distributing compiled APKs.
+
+ZXing core 3.5.3 — offline Android QR encoding
+https://github.com/zxing/zxing
+Copyright ZXing authors. Apache License 2.0; see licenses/ZXing-Apache-2.0.txt.

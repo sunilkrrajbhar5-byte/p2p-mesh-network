@@ -32,6 +32,8 @@ import android.net.wifi.WpsInfo
 import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pInfo
+import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo
+import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest
 import android.net.wifi.p2p.WifiP2pManager
 import android.os.Build
 import android.os.Handler
@@ -86,7 +88,8 @@ import kotlin.coroutines.resumeWithException
 class WifiDirectManager(
     context: Context,
     val cluster: ClusterController,
-    val routingTable: MeshRoutingTable = MeshRoutingTable(SystemClock::elapsedRealtime)
+    val routingTable: MeshRoutingTable = MeshRoutingTable(SystemClock::elapsedRealtime),
+    val consent: PeerConsentController = PeerConsentController()
 ) {
     sealed class State {
         data object Idle : State()
@@ -204,6 +207,41 @@ class WifiDirectManager(
         action { p2p!!.discoverPeers(ch, it) }
     }
 
+
+    data class NearbyDevice(val identity: String, val address: String, val clusterId: UUID, val seenAt: Long)
+    private val nearbyState = MutableStateFlow<List<NearbyDevice>>(emptyList())
+    val nearby: StateFlow<List<NearbyDevice>> = nearbyState.asStateFlow()
+    private var serviceInfo: WifiP2pDnsSdServiceInfo? = null
+    private var serviceRequest: WifiP2pDnsSdServiceRequest? = null
+
+    /** DNS-SD identity is a display claim, not cryptographic authentication. No group secret. */
+    suspend fun discoverIdentities(advertise: Boolean = cluster.isOwner) = onMain {
+        checkPermissions(); checkLocationMode()
+        val ch = initializeP2p()
+        p2p!!.setDnsSdResponseListeners(ch, { _, _, _ -> }, { domain, record, device ->
+            if (domain.equals("srmesh._srmesh._tcp.local.", ignoreCase = true) && record["consent"] == "1") {
+                val id = record["identity"]
+                val group = runCatching { UUID.fromString(record["cluster"]) }.getOrNull()
+                if (id != null && MeshPacket.isValidIdentity(id) && id != cluster.localId && group != null) {
+                    val now = SystemClock.elapsedRealtime()
+                    nearbyState.value = (nearbyState.value.filter { it.address != device.deviceAddress && now - it.seenAt < 30_000 }
+                        + NearbyDevice(id, device.deviceAddress, group, now)).takeLast(64)
+                }
+            }
+        })
+        if (advertise && serviceInfo == null) {
+            val info = WifiP2pDnsSdServiceInfo.newInstance("srmesh", "_srmesh._tcp",
+                mapOf("identity" to cluster.localId, "cluster" to cluster.clusterId.toString(), "consent" to "1"))
+            action { p2p!!.addLocalService(ch, info, it) }; serviceInfo = info
+        }
+        if (serviceRequest == null) {
+            val request = WifiP2pDnsSdServiceRequest.newInstance("_srmesh._tcp")
+            action { p2p!!.addServiceRequest(ch, request, it) }; serviceRequest = request
+        }
+        nearbyState.value = nearbyState.value.filter { SystemClock.elapsedRealtime() - it.seenAt < 30_000 }
+        action { p2p!!.discoverServices(ch, it) }
+    }
+
     /** Explicit AP mode for browser clients; they join the SSID through system Wi-Fi settings. */
     suspend fun startLocalHotspot(): State = onMain {
         checkPermissions()
@@ -229,6 +267,8 @@ class WifiDirectManager(
         } catch (e: CancellationException) {
             resetHome()
             throw e
+        } catch (e: RequestDeclinedException) {
+            resetHome(); throw e
         } catch (e: SecurityException) {
             resetHome(); mutableState.value = State.Failed(e.message ?: "Permission denied"); throw e
         } catch (e: Exception) {
@@ -259,6 +299,8 @@ class WifiDirectManager(
             directReady = true
             State.DirectClient(cluster.ownerId).also { mutableState.value = it }
         } catch (e: CancellationException) {
+            resetHome(); throw e
+        } catch (e: RequestDeclinedException) {
             resetHome(); throw e
         } catch (e: SecurityException) {
             resetHome(); mutableState.value = State.Failed(e.message ?: "Permission denied"); throw e
@@ -468,25 +510,36 @@ class WifiDirectManager(
             try {
                 socket.tcpNoDelay = true
                 socket.keepAlive = true
-                socket.soTimeout = MeshRoutingTable.ROUTE_TIMEOUT_MS.toInt()
+                socket.soTimeout = HANDSHAKE_TIMEOUT_MS.toInt()
                 if (accepted) {
                     val hello = relay?.readControl(socket.getInputStream()) ?: MeshPacket.readFrom(socket.getInputStream())
                     validateHeartbeat(hello, group, cluster.localId)
-                    require(hello.payload.isEmpty()) { "Invalid client hello" }
+                    require(hello.payload.contentEquals(byteArrayOf(67))) { "Peer must support explicit admission" }
+                    session.peerId = hello.senderId
+                    if (!consent.ask(PeerConsentController.Request(session.id, hello.senderId,
+                            PeerConsentController.Kind.CONNECTION))) {
+                        MeshPacket(PacketType.HEARTBEAT, cluster.localId, group, byteArrayOf(127),
+                            hello.senderId, hopLimit = 1).forNextHop().writeTo(socket.getOutputStream())
+                        socket.getOutputStream().flush()
+                        throw RequestDeclinedException()
+                    }
                     val member = cluster.admitClient(hello.senderId, session.id)
                     session.peerId = member.nodeId
                     heartbeat(group, session.peerId, member.role).forNextHop().writeTo(socket.getOutputStream())
                 } else {
                     val owner = requireNotNull(expectedOwner)
-                    heartbeat(group, owner).forNextHop().writeTo(socket.getOutputStream())
+                    MeshPacket(PacketType.HEARTBEAT, cluster.localId, group, byteArrayOf(67), owner, hopLimit = 1)
+                        .forNextHop().writeTo(socket.getOutputStream())
                     val welcome = relay?.readControl(socket.getInputStream()) ?: MeshPacket.readFrom(socket.getInputStream())
                     validateHeartbeat(welcome, group, cluster.localId)
                     require(welcome.senderId == owner) { "Unexpected cluster owner" }
+                    if (welcome.payload.contentEquals(byteArrayOf(127))) throw RequestDeclinedException()
                     val role = readRole(welcome)
                     if (!adjacent) cluster.attachOwner(owner, session.id, role)
                     session.peerId = owner
                 }
                 handshakeDeadline.cancel()
+                socket.soTimeout = MeshRoutingTable.ROUTE_TIMEOUT_MS.toInt()
                 session.lastHeartbeat = SystemClock.elapsedRealtime()
                 synchronized(publishing) {
                     check(epoch == transportEpoch.get() && !socket.isClosed) { "Transport stopped during handshake" }
@@ -557,6 +610,7 @@ class WifiDirectManager(
 
     private fun closeSession(session: Session) {
         if (!session.closed.compareAndSet(false, true)) return
+        consent.cancel(session.id)
         session.priority.close()
         runCatching { session.socket.close() }
         session.job?.cancel()
@@ -777,6 +831,9 @@ class WifiDirectManager(
     private suspend fun releaseP2p() {
         directReady = false
         val ch = channel ?: return
+        serviceInfo?.let { info -> runCatching { action { p2p?.removeLocalService(ch, info, it) } } }
+        serviceRequest?.let { request -> runCatching { action { p2p?.removeServiceRequest(ch, request, it) } } }
+        serviceInfo = null; serviceRequest = null; nearbyState.value = emptyList()
         // Wait for callbacks before attempting LOHS, rather than racing both radios.
         runCatching { action { p2p?.cancelConnect(ch, it) } }
         runCatching { action { p2p?.stopPeerDiscovery(ch, it) } }
@@ -830,7 +887,7 @@ class WifiDirectManager(
         private const val GROUP_TIMEOUT_MS = 25_000L
         private const val NETWORK_TIMEOUT_MS = 45_000L
         private const val CONNECT_TIMEOUT_MS = 8_000L
-        private const val HANDSHAKE_TIMEOUT_MS = 8_000L
+        private const val HANDSHAKE_TIMEOUT_MS = 50_000L
         private const val WRITE_TIMEOUT_MS = 10_000L
 
         fun requiredPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= 33)
