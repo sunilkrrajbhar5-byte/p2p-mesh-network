@@ -17,7 +17,7 @@ Assert-Success 'Configure Git credential helper'
 git init
 Assert-Success 'Initialize repository'
 git config --local user.name 'sunilkrrajbhar5-byte'
-git config --local user.email '284866519+sunilkrrajbhar5-byte@users.noreply.github.com'
+git config --local user.email 'sunil.kr.rajbhar5@gmail.com'
 $remotes = @(git remote)
 if ($remotes -contains 'origin') {
     git remote set-url origin 'https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network.git'
