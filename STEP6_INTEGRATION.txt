@@ -1,0 +1,222 @@
+STEP 6: JETPACK COMPOSE UI
+
+FILES
+ProfileOnboardingScreen.kt, MeshRadarScreen.kt, MainChatScreen.kt,
+DebugConsoleOverlay.kt, MeshUiModels.kt, MeshUiAdapters.kt.
+Copy all six into com.example.mesh alongside Steps 1-5. Also replace
+IdentityGenerator.kt and ChunkManager.kt with the included versions:
+- IdentityGenerator.getExistingIdentity() loads without creating an identity.
+- ChunkManager.sendFile(..., onProgress = { sent: Long, total: Long -> ... })
+  reports actual completed socket writes at 512 KiB logical-block boundaries.
+  It remains source-compatible with existing callers; rebuild all modules.
+Step6Checks.kt and the other *Checks.kt files are JVM checks, not app source.
+
+BUILD
+Keep Step 5's CameraX/Media3 dependencies when using its engines. For this UI:
+
+// Root/module plugins, according to your existing Gradle setup:
+id("org.jetbrains.kotlin.android") version "2.1.20"
+id("org.jetbrains.kotlin.plugin.compose") version "2.1.20"
+
+// App module, with google() and mavenCentral() repositories:
+android {
+    namespace = "com.example.mesh"
+    compileSdk = 35 // Or a newer installed SDK supported by your AGP.
+    defaultConfig { minSdk = 26 }
+    buildFeatures { compose = true }
+}
+dependencies {
+    implementation(platform("androidx.compose:compose-bom:2025.04.01"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("androidx.security:security-crypto:1.1.0")
+}
+
+These versions are pinned, not a claim that they are the latest releases. Use the
+Kotlin Compose plugin, not the legacy kotlinCompilerExtensionVersion setting.
+Retain the manifest entries and identity backup exclusions from Steps 1-5.
+The UI requires no additional permissions, no location-distance calculation,
+and no icon, font, image, string-resource, Navigation or Accompanist dependencies.
+Merge AndroidManifest.step3.xml and AndroidManifest.step5.xml into your real
+manifest. There is deliberately no standalone application/launcher in this bundle.
+
+HOST CONTRACT
+Render under MaterialTheme in a ComponentActivity.setContent block. The host
+owns navigation, service binding, route selection, ViewModel state, and transfer
+jobs. The screen functions are complete UI components with explicit callbacks;
+they do not create a second relay service or invent incoming chat messages.
+Pass immutable list snapshots, unique message IDs and unique transfer request
+IDs. Collect service/ViewModel StateFlows with collectAsStateWithLifecycle().
+Use a MaterialTheme colorScheme appropriate for your app; all screens support
+its light/dark colors. They apply safe-drawing/IME insets themselves, so avoid
+also applying the same insets in the host Scaffold content.
+
+ONBOARDING
+ProfileOnboardingScreen(onContinue = { identity, pin ->
+    // Invoke your group-admission flow, then navigate to the radar/chat.
+    // Do NOT log pin or put it in a navigation route, Bundle or SavedStateHandle.
+})
+
+The persisted identity loads on IO. On first use, Create profile commits a
+SecureRandom six-digit suffix through IdentityGenerator. A recomposition or
+nickname edit never rotates the identity. Only the persisted full identity is
+displayed as an ID; there is no fake preview suffix. Existing profiles are shown
+automatically; passing initialIdentity skips the initial load when already known.
+Nickname persistence errors are surfaced instead of falling back to plaintext.
+
+The six-digit Group PIN is password-masked and kept only in ordinary in-memory
+Compose state (not rememberSaveable). The callback receives it once per explicit
+Continue attempt; clear it from host state after admission. Java/Kotlin Strings
+are immutable, so this is not a promise of cryptographic memory erasure.
+IMPORTANT: the current mesh handshake has no group-PIN authentication. This
+screen collects the PIN for your host admission callback; it does not enforce
+membership or encrypt the transport. Do not present a PIN-protected connection
+as implemented until the admission protocol is implemented and tested.
+
+Nearby Wi-Fi permission is required to Continue; microphone, camera and
+notification permissions are optional and requested individually on button taps.
+On API 26-32, discovery requests both coarse and fine location; the fine grant
+and enabled Android location services are still required by the existing engine.
+API 33+ uses NEARBY_WIFI_DEVICES. Permission state refreshes on Activity resume,
+including after returning from Settings. A denied mic/camera must keep the
+corresponding host action disabled; permission requests here do not bypass the
+runtime checks in the audio/camera engines. The host should refresh its own
+permission state on resume and before media actions.
+
+RADAR
+Collect relay.connections and relay.routes.routes, then build view models:
+
+val clusters = buildRadarClusters(
+    clusterLabels = linkedMapOf(homeClusterId to "Cluster 1", adjacentClusterId to "Cluster 2"),
+    routes = routes,
+    connections = connections,
+    planningBands = mapOf(homeClusterId to "0–400 m", adjacentClusterId to "400–800 m")
+)
+MeshRadarScreen(clusters, scanning, onScan = { /* launch relay.discoverPeers() */ },
+    onNodeSelected = { node -> /* open chat with node.id in node.clusterId */ })
+
+scanning/error are host-owned results of the discovery request; disable repeated
+requests until the request finishes. Cluster labels/order come from your topology
+and stay stable. A search filters cluster labels and full identities. Direct
+connections and routes for the same destination are deduplicated. Multi-hop
+reachability requires a live next-hop session; hop counts come from the route
+table. The bridge label means an actual adjacent-cluster socket, not a guessed
+hardware radio capability.
+
+The requested distance bands are optional DEPLOYMENT ESTIMATES, explicitly
+labeled as such. Hop count, cluster number and Wi-Fi Direct discovery do not
+establish 400-meter coverage. Android's WifiP2pDevice and the current connection
+model do not expose per-peer RSSI; the default display is Signal unavailable.
+Only supply measuredRssiBySession when you have an actual matching link
+measurement. A remote multi-hop node does not inherit its next hop's RSSI.
+Discovery candidates without mesh identities are handled by your existing
+connection picker; radar entries represent established sessions/learned routes.
+
+CHAT / VOICE
+MainChatScreen(
+    conversationId = recipientId,
+    title = recipientId,
+    messages = messages, // Chronological; host owns deduplication/history limits.
+    transfers = transfers,
+    connected = hasLiveRoute,
+    pttEnabled = microphoneGranted && voiceEngineAvailable,
+    onSendText = { text ->
+        val packet = MeshPacket(PacketType.TEXT, myId, clusterId,
+            text.toByteArray(Charsets.UTF_8), recipientId)
+        relay.sendAwait(nextHopSessionId, packet)
+        // Append/update your sent-message state using packet.packetId.
+    },
+    onFileSelected = { uri -> /* launch your document-import/transfer job */ },
+    onPttStart = { voice.startTalking(recipientId) },
+    onPttStop = { voice.stopTalking() },
+    onCancelTransfer = { requestId -> transferJobs[requestId]?.cancel() },
+    onVideoNote = { /* open Step 5's camera screen */ }
+)
+
+Use a conversation key that changes if either recipient or destination cluster
+changes. The host must resolve a fresh route/session before sending. Do not mark
+text DELIVERED from a socket write: SENT means local write completion; the
+existing reverse file ACK is not a text-delivery ACK. Set ChatDelivery.DELIVERED
+only when your text protocol has actually acknowledged that message.
+
+PTT supports pointer hold/release, drag/gesture cancellation, keyboard hold/release,
+and an accessibility action that toggles start/stop. It releases on focus loss,
+conversation disposal/change, disabled state and lifecycle pause/stop. The stop
+callback captured at press time releases the SAME voice engine even if callbacks
+change during recomposition. The host still owns Step 5's engine lifecycle and
+must disable/recreate it after audio-focus loss or encoder failure. Coordinate
+microphone ownership before opening video notes, as described in Step 5.
+
+FILE TRANSFERS
+The Attach file button launches Android's OpenDocument picker. A returned Uri is
+NOT a filesystem path. In an IO coroutine, open it with ContentResolver and
+stream-copy with a bounded buffer to a stable app-private endpoint file before
+calling the current File-based chunk manager. Do not use readBytes(), allocate
+a 1 GB ByteArray, or try File(uri.path). Do not import on the picker callback's
+main thread. If a job must survive process recreation, obtain/retain the document
+grant when supported and persist the job in the host; the screens do not add a
+background job scheduler. Check available cache space and your file-size policy.
+
+For an already stable endpoint File, the supplied adapter performs real transfer:
+
+val requestId = java.util.UUID.randomUUID()
+val job = viewModelScope.launch {
+    try {
+        sendChatFile(sourceFile, recipientId, destinationClusterId, chunks, requestId) { state ->
+            // IO callback. Example StateFlow<Map<UUID, FileTransferUi>>:
+            transferStates.update { it + (state.id to state) }
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+    catch (e: Exception) { /* state is FAILED; surface/retry according to app policy */ }
+}
+transferJobs[requestId] = job
+
+Keep transferStates bounded and remove/dismiss old finished entries in the host.
+Progress uses Long byte counts and Double division, including files larger than
+2 GiB. PREPARING covers hashing and waiting for the receiver; SENDING reflects
+completed socket writes; VERIFYING does not mean delivered. DELIVERED is emitted
+only after ChunkManager.sendFile() returns after the matching reverse VERIFIED
+ACK. Failed/cancelled transfers never get a double tick. UI requestId and wire
+transferId are intentionally distinct; the adapter returns the latter on success.
+Callbacks must be fast, thread-safe and nonthrowing. Cancellation retains the
+existing transport semantics: an in-progress socket write may finish before the
+job returns. The receiver reclaims incomplete files via its existing timeout.
+
+DEBUG OVERLAY
+Box(Modifier.fillMaxSize()) {
+    // Current screen here.
+    DebugConsoleOverlay(relay.connections,
+        Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(8.dp))
+}
+
+The overlay collects the actual connection StateFlow while lifecycle STARTED,
+samples RAM on IO once per second, and shows active TCP sessions/peer/cluster IDs.
+Java heap usage/limit, native allocation and process PSS are distinct metrics;
+PSS includes shared-memory accounting and must not be added to the heap values.
+The latest 100 observed connection changes are retained only in memory. The
+console reconciles snapshots after resuming and is NOT a complete connection
+audit log: StateFlow conflation can hide very short-lived intermediate changes.
+No message bodies, Group PINs or hotspot credentials are logged. Collapsing it
+leaves a compact status button, not a full-screen input-intercepting overlay.
+
+VALIDATION AND LIMITS
+All production Kotlin files, including the four screens, compiled with Kotlin
+2.1.20 plus the Compose compiler plugin against Android framework stubs and the
+actual pinned AndroidX artifacts. JVM checks cover >2 GiB progress arithmetic,
+unknown signal handling, route reachability/grouping, and real progress callbacks
+through the existing transfer/relay test harness. All six JVM check suites passed.
+The full transfer run verified 1,073,754,169 bytes with a 256 MiB JVM heap,
+monotonic completed-write progress, reverse VERIFIED ACK delivery, and rejection
+without a delivered UI state for corrupt data. This is compiler/JVM validation,
+not an assembled APK or emulator/device UI test. Verify runtime permissions,
+rotation, TalkBack, keyboard/gesture cancellation, large text and insets on device.
+
+API references:
+https://developer.android.com/develop/ui/compose/libraries
+https://developer.android.com/develop/ui/compose/touch-input/pointer-input/understand-gestures
+https://android-developers.googleblog.com/2025/04/whats-new-in-jetpack-compose-april-25.html

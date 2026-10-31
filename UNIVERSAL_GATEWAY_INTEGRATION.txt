@@ -1,0 +1,265 @@
+UNIVERSAL GATEWAY: IMPLEMENTATION AND DEPLOYMENT CONTRACT
+
+This is a compiled, tested interoperability implementation, NOT a certification
+of production readiness on every OS/browser/OEM. Trusted HTTPS is the selected
+deployment. Real-device browser audio, PWA installation, Android hotspot behavior,
+and an assembled Android APK remain unvalidated. The raw mesh protocol still
+requires trusted native peers; CRC32 is not authentication or encryption.
+
+WHAT IS PROVIDED
+- UniversalMeshGateway.kt: portable Android/JVM HTTPS + WebSocket host on 8080.
+- WebMeshClient.html: one self-contained application file, with no external CDN.
+- GatewayWebAssets.kt: same-origin manifest, service worker and embedded icon.
+- DesktopMeshHost.kt: desktop raw TCP owner on 8888, native heartbeat/handshake,
+  shared relay/ACK/chunk engine, PKCS12 TLS startup and shutdown.
+- BrowserVoiceWire.kt: bounded PTT2 media-container payload definition.
+- BrowserVoicePlayer.kt: Android's MediaExtractor/MediaCodec/AudioTrack adapter.
+- vendor/NanoWSD.java: BSD-3-Clause upstream WebSocket implementation with bounded
+  inbound frames/fragments and mandatory client masking. License retained inline.
+
+UPDATED EXISTING FILES
+- RelayPacketFilter.kt: one optional TransportBridge; shared duplicate cache,
+  CRC validation, TTL decrement and ingress exclusion apply to BOTH transports.
+- SilentRelayService.kt: enableUniversalGateway(), explicit startLocalHotspot(),
+  browser-aware local sends/ACKs/file destinations, gateway lifecycle cleanup.
+- WifiDirectManager.kt: explicit Local-Only Hotspot startup, not only fallback.
+- PttVoiceEngine.kt: accepts PTT1 raw AAC and PTT2 complete browser containers.
+- ClusterController.kt: browser leaves are never selected as bridge routers.
+  At five members, the fifth node is selected if native/capable; otherwise the
+  latest eligible native peer is selected and notified by existing heartbeats.
+  A cluster of only browser leaves has no client bridge router.
+
+HOST/CLIENT PLATFORM MATRIX
+Android host: Local-Only Hotspot + HTTPS/WSS + existing TCP/relay engine.
+Windows/macOS/Linux host: JVM server on an EXISTING LAN, external access point,
+  or manually configured OS hotspot. Portable JVM code cannot create Android
+  Local-Only Hotspots or reliably configure every desktop OS's access point.
+Android native client: existing TCP transport, with updated PTT decoder for voice.
+iPhone/iPad/macOS/Windows/Android browser: foreground HTTPS web client on the
+  host's Wi-Fi/LAN. It is a leaf endpoint, not a Wi-Fi Direct/group owner/mesh router.
+
+Users must join the Wi-Fi network in system settings. Keep using that network
+when the OS warns it has no Internet; grant local-network access if prompted.
+The application cannot override OS Wi-Fi selection, radio concurrency, local
+network permissions or background browser suspension. This does not turn every
+iPhone into a background mesh relay. Existing five-member application admission
+is enforced across native and browser members; this is not an unlimited AP.
+
+HTTPS AND PWA
+Serve at https://<gateway-name-or-IP>:8080. The certificate SAN must match that
+exact name/IP, and its issuer must already be trusted by each client device.
+Provision a valid certificate or deploy a private CA/profile out of band. A
+certificate-warning bypass is NOT a substitute for a trusted secure context.
+Private IPs generally require a private CA with an IP SAN, or an offline-resolvable
+hostname with an appropriate certificate. DNS/CA provisioning is deployment work,
+not silently performed by the source bundle. Supply SSLServerSocketFactory on
+Android, or a PKCS12 keystore on desktop. No production private keys are bundled.
+
+Plain HTTP is accepted only on 127.0.0.1 for local test fixtures. Remote HTTP is
+rejected. Browsers require a secure context for microphone capture and service
+workers. A PWA cannot literally consist of only one HTTP resource: the gateway
+also serves /sw.js, /manifest.webmanifest and /icon.png from Kotlin constants.
+Both 192px and 512px PNG icons are served; /icon192.png is the smaller variant.
+The HTML app is still a single deployable HTML file with all UI/CSS/JS embedded.
+Installation is browser-specific and user-initiated (for example, Add to Home
+Screen). The cached shell can reopen offline, but live communication/downloads
+still require the local gateway. No WAN or CDN is used at runtime.
+
+DEPENDENCIES AND SOURCE SETS
+Retain Steps 1-6's dependencies and Kotlin 2.1.20/coroutines 1.10.2.
+Android: minSdk 26, compileSdk 35+, existing INTERNET/Wi-Fi/foreground permissions.
+
+implementation("org.nanohttpd:nanohttpd:2.3.1")
+
+Copy vendor/NanoWSD.java to src/main/java/fi/iki/elonen/NanoWSD.java. Do NOT add
+nanohttpd-websocket as a Maven dependency too: that would duplicate the class
+and/or replace the bounded version. Android supplies org.json; do NOT bundle
+the desktop org.json dependency into the Android app.
+Put WebMeshClient.html in src/main/assets/WebMeshClient.html.
+
+Desktop dependencies:
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+implementation("org.nanohttpd:nanohttpd:2.3.1")
+implementation("org.json:json:20240303")
+
+Desktop source set: MeshPacket, ClusterController, MeshRoutingTable,
+PriorityQueueManager, RelayPacketFilter, AckManager, ChunkManager,
+UniversalMeshGateway, DesktopMeshHost, BrowserVoiceWire, GatewayWebAssets,
+plus vendor/NanoWSD.java. Do NOT include Android/Compose classes in the desktop
+module. Use JDK 17 or newer. BrowserVoicePlayer and PttVoiceEngine are Android-only.
+GatewayTestHost.kt, GatewayRelayChecks.kt and GatewayChecks.py are tests, not app
+source. All of the above engines were compiled against the real dependencies.
+
+ANDROID STARTUP
+1. Start/bind/configure SilentRelayService as in Step 3 with an owner identity.
+2. Obtain required Nearby Wi-Fi permissions and call relay.startLocalHotspot().
+   Show the returned HotspotOwner invitation SSID/passphrase to the user.
+3. Determine the actual local hotspot address and provision matching TLS; do not
+   assume 192.168.43.1 across OEMs. The declared HTTPS origin must match browser
+   navigation exactly, including port, with no trailing slash/path/query.
+4. Load the app asset and start the gateway:
+
+val html = context.assets.open("WebMeshClient.html").bufferedReader().use { it.readText() }
+val gateway = relay.enableUniversalGateway(
+    origin = "https://YOUR_CERTIFICATE_NAME_OR_IP:8080",
+    joinSecret = admissionSecret,
+    tls = configuredSslServerSocketFactory,
+    html = html
+)
+
+admissionSecret must be at least 32 bytes and generated with SecureRandom; a
+six-digit Group PIN is NOT sufficient. Share it privately, optionally in a QR
+URL fragment: https://host:8080/#join=<percent-encoded-secret>. The page removes
+the fragment immediately, exchanges the key for a random HttpOnly/SameSite/secure
+session cookie, and does not save the admission key in localStorage. Display IDs
+are localStorage-backed Nickname#6Digits; they are not cryptographic identities.
+
+The service owns gateway shutdown. Browser peers are gateway.browserPeers();
+they are not raw TCP entries in relay.connections. To send a native-host packet
+to a browser, resolve its virtual session via gateway.routes(header) and call
+relay.sendAwait(session, packet). The non-suspending raw send() API is unchanged;
+use sendAwait for hybrid routing. Existing file endpoints use the new browser
+lookup automatically. Adapt the host radar to include these browser peers.
+
+This is not new multi-cluster route discovery. Browser radar exposes connected
+native routes known to the gateway plus its browser endpoints. Native clients
+must route browser destinations through the gateway's TCP session; remote mesh
+route discovery/advertisement must already exist in the host application.
+
+DESKTOP STARTUP
+Compile the desktop source set with the dependencies above. Main class:
+com.example.mesh.DesktopMeshHostKt
+
+Arguments, in order:
+  bindIP https://certificate-name:8080 Host#123456 clusterUUID
+  path/to/WebMeshClient.html path/to/private-cache path/to/server.p12
+
+Environment variables:
+  MESH_TLS_PASSWORD = keystore password
+  MESH_JOIN_SECRET = independently generated random admission secret (>=32 bytes)
+
+Bind the intended LAN interface; configure OS firewall access to TCP 8080 and
+8888 for that LAN. DesktopMeshHost creates no Wi-Fi hotspot automatically.
+Use the same clusterUUID/owner identity in the Android client's existing raw
+handshake. The headless desktop router is not advertised as a chat recipient;
+the desktop user opens the browser client and joins with their own browser ID.
+The desktop process must stay running; Ctrl+C closes sessions, caches and servers.
+
+FILE PATH AND MEMORY CONTRACT
+Browser upload -> HTTP PUT of <=512 KiB -> bounded temporary endpoint file ->
+existing ChunkManager -> native or virtual browser destination -> SHA-256 ->
+reverse VERIFIED ACK. Progress distinguishes staging, sending, verification and
+delivered. No new 512 KiB outer mesh packet was introduced: the existing codec
+still carries <=32 KiB transfer fragments and its u16 length remains unchanged.
+Each HTTP upload chunk is fully acknowledged before the next is sent. The browser
+uses File.slice().stream() and a <=512 KiB Uint8Array, never a 1 GiB arrayBuffer.
+
+Browser downloads are served from that browser endpoint's verified cache only.
+The service worker builds a backpressured ReadableStream, fetches <=512 KiB per
+pull and hands it to the browser's download manager. The UI reports bytes handed
+to the download stream, not proof of durable storage on the receiving device.
+A native HTTP download link is also supplied for browsers that cannot save a
+service-worker streaming response. That fallback uses the browser's own download
+progress; it never builds a file-sized Blob in application JavaScript.
+
+The gateway is a FILE ENDPOINT PROXY, so browser-owned uploads/downloads are
+deliberately cached on the host disk. This does not preserve a global zero-disk
+promise for browser files. Pure native-to-native transit through RelayPacketFilter
+still has no file writes. Default browser file limit: 2 GiB; upload reservation
+budget: 4 GiB; two uploads/client; four application clients total including native
+peers. Receiver caches are separately limited by each endpoint's ChunkManager.
+Provision enough disk space; I/O failures reject the transfer rather than report
+delivery. Browser sessions expire after 120 seconds without activity; the page
+sends application pings. Disconnect/logout removes that endpoint's cached files.
+Delete cached files with the provided button after downloading them to release
+receiver capacity. Active download streams refresh activity and close on logout;
+stalled HTTP writes are aborted after 30 seconds without further read progress.
+This is not durable account storage or resumable transfer across process death.
+After a crash, purge old files from the dedicated private gateway cache when no
+gateway instance owns it. Never recursively purge a user-selected directory.
+
+VOICE CONTRACT
+Browser capture uses MediaRecorder with runtime MIME checks, preferring MP4/AAC
+and then WebM/Opus. Web Audio decodes/plays the received audio after a user gesture.
+Each approximately 200 ms segment is a COMPLETE stopped recording. Arbitrary
+timeslice blobs are not treated as independently decodable files. PTT2 payload:
+magic 0x50545432 | UUID:16 | sequence:i32 | relative PTS:i64 | container:u8 |
+complete container. Container 1=WebM/Opus, 2=MP4/AAC; total <=20 KiB, big endian.
+Android uses its platform demuxer/decoder in RAM, not a custom media parser.
+
+Native Android PTT1 raw AAC remains unchanged. Browsers wrap native AAC access
+units in standard ADTS headers and decode small groups through Web Audio.
+Capability failures are surfaced; no incompatible container bytes are fed into
+the raw AAC decoder. Queues/packets are bounded and stale voice is dropped.
+
+This is best-effort segment-based PTT, not validated sub-500 ms real-time voice.
+Recorder startup/stop gaps, codec buffering, browser timer scheduling, decoder
+support and TCP head-of-line blocking can exceed that target. Backgrounding or
+locking iOS/other browsers can stop capture/transport. Seamless low-latency audio
+across all supported OS versions would require a separately validated WebRTC
+media gateway/native codec integration; this code does NOT claim to provide it.
+Test actual MP4/WebM demux/decoding and mouth-to-ear delay on your target devices.
+
+SECURITY AND PRODUCTION GAPS
+HTTPS/WSS enforce exact Host/Origin, secure session cookies, a high-entropy join
+key, per-endpoint file ownership and a restrictive CSP. HTTP request bodies,
+WebSocket frames/fragments, thread counts, clients and cache reservations are
+bounded. The upstream WebSocket parser is reused, with size checks before payload
+allocation and fragmented-message accumulation. No HTTP multipart parser/temp
+file behavior is used. The server exposes no arbitrary filesystem path.
+
+The EXISTING RAW TCP 8888 mesh protocol remains unencrypted and lacks mutually
+authenticated native identities. Native peers can spoof application sender IDs;
+CRC32 and display nicknames do not fix that. HTTPS protects browser connections,
+not all mesh hops. Treat the native LAN/mesh as trusted until native authentication,
+encryption, replay protection, authorization and security review are implemented.
+Also pending: dependency/security audit of the pinned embedded HTTP server,
+browser/device interoperability matrix, production certificate lifecycle, radio
+and lifecycle tests, and real audio latency measurements. Do not label this build
+production-ready or universally seamless on the basis of compiler/JVM tests.
+
+VALIDATION PERFORMED
+All production Kotlin sources compiled with Kotlin 2.1.20 and the Compose plugin;
+vendor/NanoWSD.java compiled as Java 8 bytecode. Client and service-worker JS passed
+Node syntax checks. MeshPacketChecks, Step2Checks through Step6Checks, and
+GatewayRelayChecks passed. New checks include bounded WebSocket parsing before
+payload allocation, mandatory masking, hybrid routing/TTL/CRC, no ingress echo,
+duplicate rejection, PTT2 bounds and native-only bridge election.
+
+GatewayChecks.py exercised actual HTTPS/WSS and raw TCP sockets with certificate
+verification enabled (a test certificate explicitly trusted by the test client).
+It validated admission/Origin rejection, endpoint file isolation, both chat bridge
+directions, actual HTTP upload -> mesh -> HTTP chunk-download, SHA-256 and reverse
+VERIFIED ACK. The large run transferred 1,073,754,169 bytes with -Xmx256m, including
+the bounded download stream and completed-cache deletion. Browser recording,
+playback, service-worker download behavior and native device radios were NOT
+executed by this test. No actual iPhone/iPad/Android/macOS device matrix was run.
+
+TEST HARNESS SETUP (DEVELOPMENT ONLY)
+GatewayChecks.py needs Python's websockets==15.0.1, a compiled gateway/test jar,
+and MESH_TEST_JAVA pointing to a JDK java executable if java is not on PATH.
+Its documented classpath expects build/mesh-universal-final.jar plus dependency
+jars under .tools/; adjust those paths to your build outputs. Compile the vendor
+Java class into .tools/gateway/classes, and include GatewayTestHost.kt in the test
+jar only. Test TLS material is intentionally NOT in the source bundle. Generate:
+
+keytool -genkeypair -alias mesh -keyalg RSA -keysize 2048 -validity 7
+  -dname "CN=127.0.0.1" -ext "SAN=ip:127.0.0.1,dns:localhost" -storetype PKCS12
+  -keystore .tools/gateway/test.p12 -storepass test-only-password
+  -keypass test-only-password -noprompt
+keytool -exportcert -alias mesh -keystore .tools/gateway/test.p12
+  -storepass test-only-password -rfc -file .tools/gateway/test-cert.pem
+
+Each displayed command must be entered as one line (or with your shell's line
+continuation). Run python GatewayChecks.py for a small test or append --large
+for the 1 GiB path. It binds loopback ports 18080/18888 and uses a unique temporary
+cache that is cleaned up. Its test-only credentials are not deployment defaults.
+Do not install the test certificate as an OS/browser trust root for real usage.
+
+PRIMARY API/UPSTREAM REFERENCES
+https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
+https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/dataavailable_event
+https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable
+https://webkit.org/blog/11353/mediarecorder-api/
+https://developer.apple.com/documentation/safari-release-notes/safari-18_4-release-notes
+https://github.com/NanoHttpd/nanohttpd

@@ -1,0 +1,51 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+package com.example.mesh
+
+import java.util.Base64
+
+/** The app is one HTML file. Required PWA resources are separate HTTP endpoints. */
+object GatewayWebAssets {
+    const val manifest = """{"name":"Offline Mesh","short_name":"Mesh","start_url":"/","scope":"/","display":"standalone","background_color":"#101c25","theme_color":"#101c25","icons":[{"src":"/icon192.png","sizes":"192x192","type":"image/png","purpose":"any"},{"src":"/icon.png","sizes":"512x512","type":"image/png","purpose":"any"}]}"""
+    // Embedded 512px icon; no runtime external asset dependencies.
+    val icon: ByteArray = Base64.getDecoder().decode(ICON)
+    private const val ICON = "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"
+    val icon192: ByteArray = Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAADXUlEQVR42u3dsXEbQRBEUYTAAOjSZLyMgxGSOQC42+npZ3z/tlevSiUBh8fH59ef1NrDCAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQFoP4Pv35+lcrHsBQO4FALkXAOReAJB7AUDuBQC5FwDkXgCQewFAABhaABhaABhaABhaABhaABhaABhaABhaABhaABgaAAAMDQAAhgYAAEMDAIChAQDA0AAAYGgAADA0AAAYGgAADA0AALcPDYE7qQcAgfuoBwCBu6gHAIF7qAcAgTuoBwCB/esBQGD7egAQ2L0eAAQ2rwcAgb3rAUBg63oA7QjadwagGIGNAahFYF8AahHYFoBaBHYFoBaBTYu+EQbBNZ/nByDoq3cQvH8HAMK+e9qO4N3nByDwy9etCK44NwChbx9oQ3DVeQEIfv1GC4IrzwlA+PtntiO4+nwALHgB01YEd5wLgCVvINuG4K7zALDoFXxbENx5DgCWvYMyHcHdzw/AwpewpiI48dwALH0LcRqCU88LwOLXcKcgOPmcACx/D/10BKefD4CCH2KYimDCcwFQ8ksk0xBMeR4Ain6KZ8MfukmbABA4dPLfuaftAUDo0In/5DhxCwCCh076H9epOwAQPnTCB84mbwDAgqEnf95++vkBWDL0xK8bJpwdgEVDT3rbQsq5AVg29ISXTSWdGYCFQ59+3WDSeQFYOnTT+zYBMHT1+/YBMHT1zw0BYOjqX1sEwNDVPzYNgKGPIXAvAEQNvfHXVQAwdNV7hwAwtLMAYOgT53EvAKx6fXnbGQAw9FPnSn9+AAz99NmSnx0AQ790vtTnBsDQL58x8ZkBMPRbzpn2vAAYujYADA0AAIYGAABDAwCAoQEAwNAAAGBoAAAwNAAAGBoAAAwNAACGBgAAQwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4F4AAMC9AACAewEAAPcCAADuBQAA3Mt+ABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASAAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQMrrH+2aRvIlUznzAAAAAElFTkSuQmCC")
+    val worker = """
+const SHELL='mesh-shell-v1';
+self.addEventListener('install', e => e.waitUntil(caches.open(SHELL).then(c => c.addAll(['/','/icon.png','/icon192.png','/manifest.webmanifest'])).then(() => self.skipWaiting())));
+self.addEventListener('activate', e => e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('mesh-shell-') && k !== SHELL).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+self.addEventListener('fetch', e => {
+  const url=new URL(e.request.url);
+  if(url.origin!==self.location.origin || e.request.method!=='GET') return;
+  if(url.pathname.startsWith('/save/')) {
+    e.respondWith(download(url.pathname.slice(6),e.clientId)); return;
+  }
+  if(['/', '/icon.png', '/icon192.png', '/manifest.webmanifest'].includes(url.pathname)) {
+    e.respondWith(fetch(e.request).catch(() => caches.match(e.request))); return;
+  }
+});
+async function download(id, clientId) {
+  if(!/^[0-9a-f-]{36}$/i.test(id)) return new Response('Invalid file',{status:400});
+  const metaResponse=await fetch('/file/'+id,{credentials:'same-origin',cache:'no-store'});
+  if(!metaResponse.ok) return metaResponse;
+  const meta=await metaResponse.json(); let offset=0,index=0;
+  const abort=new AbortController();
+  const body=new ReadableStream({
+    async pull(controller) {
+      try {
+        if(offset===meta.size){controller.close();return;}
+        const response=await fetch('/chunk/'+id+'/'+index,{credentials:'same-origin',cache:'no-store',signal:abort.signal});
+        if(!response.ok) throw new Error('Download failed');
+        const bytes=new Uint8Array(await response.arrayBuffer());
+        if(bytes.length!==Math.min(524288,meta.size-offset)) throw new Error('Truncated download');
+        controller.enqueue(bytes); offset+=bytes.length; index++;
+        const windows=await self.clients.matchAll({type:'window'});
+        for(const client of windows) client.postMessage({type:'downloadProgress',id,bytes:offset,total:meta.size});
+      }catch(error){abort.abort();controller.error(error);}
+    },cancel(){abort.abort();}
+  },{highWaterMark:1});
+  return new Response(body,{headers:{'Content-Type':'application/octet-stream','Content-Length':String(meta.size),
+    'Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(meta.name), 'Cache-Control':'no-store'}});
+}
+""".trimIndent()
+}

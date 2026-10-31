@@ -1,0 +1,8 @@
+{
+  "latestVersionCode": 1,
+  "latestVersionName": "1.0.0",
+  "apkDownloadUrl": "https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/releases/latest/download/app-debug.apk",
+  "webClientUrl": "https://sunilkrrajbhar5-byte.github.io/p2p-mesh-network/",
+  "forceUpdate": false,
+  "releaseNotes": "Initial universal P2P mesh release"
+}

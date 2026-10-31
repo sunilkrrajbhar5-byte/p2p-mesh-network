@@ -1,0 +1,268 @@
+GITHUB-ONLY DEPLOYMENT — sunilkrrajbhar5-byte/p2p-mesh-network
+
+WHAT IS IMPLEMENTED
+Root config.json has exactly your six requested fields and URLs. GitHub-only Kotlin
+files are in github-native/android/, package com.example.mesh.github. They replace
+the older external-server control layer in the new app Gradle module. The old root
+remote-control files/distribution server remain as historical alternatives and are
+explicitly excluded from this APK; do not initialize both implementations together.
+No external server/domain/paid account or client-side GitHub token is required.
+
+The app module is a real launcher/build integration for onboarding, encrypted
+configuration, local admin editing and updates. The prior workspace contained no
+Gradle application. Existing mesh engines are included without changes, but this
+launcher does NOT implement their missing end-to-end session/navigation wiring.
+Do not describe the generated APK as a device-tested complete mesh application.
+
+GITHUB CAPABILITIES AND LIMITS
+Use a PUBLIC repository and standard ubuntu-latest GitHub-hosted runners. Public
+Pages and standard public-repository Actions compute are available on GitHub Free,
+subject to service quotas/terms. This workflow creates no Actions artifact/cache
+storage and uses Release assets instead. No promise of unlimited free traffic or
+future pricing is made. No paid runner or external service is configured.
+
+GitHub Pages is static hosting, not a WebSocket/HTTP API server. It cannot host the
+UniversalMeshGateway process, accept anonymous installation POSTs, or count active
+installs. This variant deliberately collects no installation UUID telemetry and has
+no install-ping queue. Its telemetry is GitHub's public release-asset download_count.
+Never embed a PAT, deploy key, GitHub App private key or repository-write credential
+in an APK or public HTML to simulate a telemetry endpoint using Issues/Actions.
+
+The Pages site provides a download button and gateway launcher. The hosted
+WebMeshClient.html retains the existing client, but on github.io it shows the portal
+instead of calling nonexistent /login, /ws and /upload APIs on Pages. Enter a nearby
+gateway's trusted HTTPS origin to navigate to its same-origin live client. This
+avoids changing cookie authentication, CORS, WebSocket origins or mesh sockets.
+GitHub's TLS certificate does NOT secure a local gateway IP/name. That gateway
+still needs a certificate trusted by client devices and matching its address, as
+chosen in the prior architecture. Without provisioning that trust, zero-install
+microphone access on every offline platform cannot be guaranteed. GitHub cannot
+provide offline signalling, a TURN relay, Wi-Fi admission or a local TLS certificate.
+
+FILES
+config.json                         Public master configuration
+github-native/android/*.kt          Complete GitHub-specific Kotlin implementation
+github-native/res/xml/*.xml          Provider paths and encrypted-preference backup exclusions
+app/src/main/AndroidManifest.xml    Full merged manifest and provider declaration
+app/src/main/java/.../MainActivity.kt Integration application/launcher
+app/build.gradle.kts                Pinned Android dependencies and source inclusion
+gradlew, gradlew.bat, gradle/wrapper Pinned, checksum-verified Gradle 8.11.1
+docs/index.html                     Pages entry point / prominent APK download button
+docs/WebMeshClient.html             Same hosted client/portal
+docs/dashboard.html, stats.mjs       Public read-only download dashboard
+.github/workflows/build-release.yml Tag/manual build and Release upload
+scripts/download-counts.sh          Authenticated, paginated owner CLI statistics
+
+1. CREATE / UPLOAD THE PUBLIC REPOSITORY
+In your GitHub account create p2p-mesh-network with Public visibility. Upload the
+source tree, preserving directory paths including .github/workflows and the Gradle
+wrapper JAR. Do not upload .tools, .reference, build outputs, .env or signing keys.
+For an existing repository, integrate these files into it; do not overwrite existing
+work blindly. No repository was created/pushed/published by this local task.
+
+From this directory, after reviewing git status and ensuring secrets are excluded:
+  git add .
+  git commit -m "Add GitHub-native distribution, updates and download dashboard"
+  git branch -M main
+  git remote add origin https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network.git
+  git push -u origin main
+If origin already exists, inspect it with git remote -v instead of adding another.
+GitHub authentication for push is your normal Git/GitHub login, never app config.
+
+Master URL after main has been pushed:
+https://raw.githubusercontent.com/sunilkrrajbhar5-byte/p2p-mesh-network/main/config.json
+
+2. ENABLE GITHUB PAGES
+Repository Settings > Pages > Build and deployment:
+  Source: Deploy from a branch
+  Branch: main
+  Folder: /docs
+  Save; enable Enforce HTTPS when available.
+Wait for the Pages deployment shown in Actions/Settings. The resulting URLs are:
+https://sunilkrrajbhar5-byte.github.io/p2p-mesh-network/
+https://sunilkrrajbhar5-byte.github.io/p2p-mesh-network/dashboard.html
+https://sunilkrrajbhar5-byte.github.io/p2p-mesh-network/WebMeshClient.html
+Use /docs on main OR a gh-pages branch root, not both. /docs is the provided setup.
+The dashboard is intentionally PUBLIC: public Pages cannot provide a secret admin
+view just by hiding a URL or putting a password in JavaScript. Repository settings
+and publishing privileges remain protected by your GitHub account.
+
+3. CREATE ONE STABLE SIGNING KEY
+All updatable APKs must use the same package name and signing key. GitHub runners
+are disposable; their automatically generated debug keys would change per run.
+Create a key once, outside this repository, with a JDK keytool (interactive passwords):
+
+  keytool -genkeypair -v -keystore mesh-signing.jks -storetype JKS -alias mesh -keyalg RSA -keysize 3072 -validity 10000
+
+Back up that file/password securely. In Settings > Secrets and variables > Actions
+add four Repository secrets:
+  MESH_KEYSTORE_BASE64   Base64 of the complete .jks file, not a file path
+  MESH_KEYSTORE_PASSWORD Store password you chose
+  MESH_KEY_ALIAS         mesh (or your chosen alias)
+  MESH_KEY_PASSWORD      Key password you chose
+
+Example PowerShell with GitHub CLI authenticated as the repository owner, keeping
+the base64 value out of the console/history:
+  [Convert]::ToBase64String([IO.File]::ReadAllBytes('C:\PRIVATE\mesh-signing.jks')) | gh secret set MESH_KEYSTORE_BASE64 --repo sunilkrrajbhar5-byte/p2p-mesh-network
+  gh secret set MESH_KEYSTORE_PASSWORD --repo sunilkrrajbhar5-byte/p2p-mesh-network
+  gh secret set MESH_KEY_ALIAS --repo sunilkrrajbhar5-byte/p2p-mesh-network
+  gh secret set MESH_KEY_PASSWORD --repo sunilkrrajbhar5-byte/p2p-mesh-network
+The last commands prompt interactively. Do not paste secrets into config.json or
+commit the keystore. Anyone allowed to change release workflow code may be able to
+access release secrets; restrict write access and protect the main branch/tags.
+If users already installed another signing certificate/applicationId, this key will
+not update those installs. Use the original key/package, or reinstall deliberately.
+
+4. FIRST APK RELEASE
+The current config and app build use versionCode=1/versionName=1.0.0. After the
+source and secrets exist:
+  git tag v1.0.0
+  git push origin v1.0.0
+This triggers Build and publish Android APK. It installs SDK components, builds
+:app:assembleDebug, and uploads app-debug.apk plus its SHA-256 file to the new
+GitHub Release. The workflow's GITHUB_TOKEN has contents:write for this job only.
+If repository/organization policy blocks write permissions, enable the appropriate
+workflow permissions in Settings > Actions > General or ask its administrator.
+Manual alternative: Actions > Build and publish Android APK > Run workflow > enter
+an EXISTING tag matching that tag's config latestVersionName. The workflow must
+already exist on the default branch to appear for manual dispatch.
+Existing releases are not overwritten; that would reset asset download counts.
+If a partial publish fails, inspect the draft/release and recover explicitly; the
+workflow intentionally refuses to silently overwrite or delete existing assets.
+
+Latest download URL (404 until a successful public release exists):
+https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/releases/latest/download/app-debug.apk
+
+This is the requested DEBUG variant, signed with a stable secret. It is debuggable;
+use a release build and appropriately named asset for a hardened production rollout.
+The updater still rejects wrong signatures/packages/versions. Do not change the
+signing key to work around an update rejection.
+
+5. FUTURE UPDATES / DYNAMIC URL
+Edit config.json: increase latestVersionCode monotonically, set the new versionName,
+releaseNotes and optional forceUpdate. The tag must be v<latestVersionName>. The
+Gradle app's version is read from that same file, preventing version mismatch.
+Never mark an older release latest or decrease/reuse versionCode. The stable
+/releases/latest/download/app-debug.apk URL always points to whichever release is
+currently latest; it is not a version-pinned URL. Publish the new tagged build, then
+ensure main/config.json has the matching values. During a release/config propagation
+window the updater can reject a mismatched artifact safely; retry after both agree.
+GitHub Raw, Pages and API caching mean edits are not instantaneous global pushes.
+
+DynamicConfigManager reads the canonical Raw URL over validated Internet, with
+HTTPS, bounded response size and six-hour refresh while online. Last-good config is
+encrypted and retained offline. The local admin override is a full six-field JSON
+document; seven version taps within five seconds opens inspection/editing. Saving
+or resetting it requires the device screen-lock credential. Override URLs must
+stay in this GitHub repository and Pages project. The override changes THIS DEVICE
+only; editing the master for everyone requires committing config.json on GitHub.
+The seven-tap gesture is not an authentication boundary. No GitHub write token is
+stored in Android preferences. Encrypted prefs are excluded from cloud backup and
+device transfer. Keystore failures are surfaced, not downgraded to plaintext.
+
+6. ANDROID INTEGRATION / INSTALLER
+The new launcher initializes managers once per Application. In an existing app use
+the package com.example.mesh.github, NOT the old com.example.mesh remote managers:
+  val config = DynamicConfigManager.create(application)
+  val updates = AppUpdateManager.create(application, config, BuildConfig.VERSION_CODE.toLong())
+Pass RemoteVersionControl(config, updates) to ProfileOnboardingScreen's remoteControls
+slot and render RemoteUpdateDialog(updates) once above navigation under MaterialTheme.
+Factories are suspend functions; retain their results outside recomposition. The
+BuildConfig is your application's generated class; this supplied launcher imports
+its own naturally. Copy/merge the supplied FileProvider manifest/resources if you
+use another application module. Provider authority is ${applicationId}.updates,
+exported=false with grantUriPermissions=true; it exposes only cache/updates.
+
+Update Now enqueues Android DownloadManager. It persists download ID/offer, resumes
+monitoring after process restart, copies the completed APK into private cache,
+verifies APK signatures using Google's apksig, checks the installed signer set,
+applicationId and exact increasing versionCode, then offers Install. FileProvider
+grants Android's installer temporary read access using ACTION_VIEW and APK MIME.
+After enabling Allow from this source, return and press Install again. Android
+always requires the user's installer approval; forceUpdate cannot silently install.
+Forced updates start downloading when Internet is available and keep the online
+prompt mandatory, while offline mesh use remains possible.
+DownloadManager chooses the system network; unlike config requests it cannot be
+bound to a specific Network. No process-wide routing or mesh sockets are changed.
+Downloads above 256 MiB are rejected when observed and before installer handoff;
+DownloadManager is a system downloader and can exceed that size while this app is
+not running. Cancellation removes its download. App shutdown leaves it recoverable.
+Signature checks are repeated on the private cached file before launching Android's
+installer. Signing-key rotation is intentionally rejected by exact signer matching.
+No installation telemetry service/WorkManager jobs are included in this variant.
+
+7. DOWNLOAD STATISTICS
+The dashboard fetches the public API directly, paginating releases AND their assets,
+and sums assets named app-debug.apk. It includes public prereleases. Its cached
+snapshot is labeled with time; failure never gets reported as zero. It limits
+refreshes to once a minute, and does not continuously poll the shared public quota.
+GitHub's unauthenticated REST quota is normally 60 requests/hour per originating IP;
+one refresh may consume several requests. Large histories use the owner CLI script.
+Do not put an authenticated token into dashboard.html. API counts are snapshots,
+not guaranteed instantaneous or unique-person/completed-install measurements.
+Deleting/replacing an asset removes its old count from this sum.
+
+Inspect one API page with curl (PowerShell: use curl.exe):
+  curl -L -H "Accept: application/vnd.github+json" "https://api.github.com/repos/sunilkrrajbhar5-byte/p2p-mesh-network/releases?per_page=100"
+
+With jq, sum the embedded APK assets on this first page only:
+  curl -fsSL "https://api.github.com/repos/sunilkrrajbhar5-byte/p2p-mesh-network/releases?per_page=100" | jq '[.[] | .assets[] | select(.name == "app-debug.apk") | .download_count] | add // 0'
+
+For the complete paginated history, authenticate your LOCAL GitHub CLI and run in
+Git Bash/Linux/macOS:
+  bash scripts/download-counts.sh
+No counter-incrementing router/server is needed because downloads go directly to
+GitHub Release assets. Active installs, device OS versions, install UUIDs and
+uninstall counts are not available from this API and are not fabricated.
+
+8. BUILD / VERIFY
+Requires JDK 17 and Android SDK platform 35/build-tools 35.0.0. Android Studio can
+open the repository root; Gradle dependencies/wrapper are pinned. Local builds use
+your machine's normal debug key unless you set the four MESH_KEYSTORE_* / MESH_KEY_*
+environment variables used in app/build.gradle.kts. Local keys may differ from CI.
+  ./gradlew :app:assembleDebug         (PowerShell: .\gradlew.bat :app:assembleDebug)
+  node --test scripts/github-stats.test.mjs
+  node --test scripts/github-portal.test.mjs
+The local checks also compile the Kotlin sources against Android/AndroidX libraries
+and exercise config validation. Real APK packaging and device tests must pass before
+distribution. Test offline cached startup, seven taps and credential authentication,
+version 1 to 2 signed update, mismatched signature/package rejection, process death,
+DownloadManager recovery, unknown-app permission, and simultaneous live mesh use.
+The certificate, local gateway provisioning and end-to-end mesh session wiring
+remain independent of this free GitHub distribution setup.
+
+LOCAL VALIDATION RESULT
+The GitHub variant, existing engine sources and new launcher compiled together with
+the Kotlin/Compose compiler against Android/AndroidX classpaths. A temporary
+BuildConfig stand-in was used only for that standalone compiler check; Gradle
+generates the real class. GitHub config checks, five Node web tests, manifest/resource
+XML and workflow YAML validation passed. The existing socket-engine files match the
+previous bundle byte-for-byte. The wrapper matches Gradle's published SHA-256.
+The full Gradle attempt failed resolving Google's signflinger-8.9.2.jar because the
+TLS connection was terminated; a separate SDK platform fetch failed DNS resolution.
+Consequently app-module Gradle evaluation, APK packaging and Actions execution are
+NOT verified by that attempt. No APK is included or claimed successfully assembled.
+Run the workflow with the configured secrets/working SDK downloads before release.
+The unauthenticated public repository lookup returned 404 during this task: it may
+be private or not created. No account settings, repository, Pages deployment or
+Release were changed remotely.
+
+OFFICIAL REFERENCES
+https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages
+https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
+https://docs.github.com/en/rest/releases/assets
+https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+https://docs.github.com/en/billing/concepts/product-billing/github-actions
+https://developer.android.com/reference/android/app/DownloadManager
+https://developer.android.com/reference/androidx/core/content/FileProvider
+
+ADMIN PIN GATE UPDATE
+Seven version taps now show Admin PIN Required before the configuration editor.
+Default PIN: 1990. Change ADMIN_PIN_SHA256 in the applicable DynamicConfigManager.kt
+companion object to configure another 4-12 ASCII-digit PIN. Incorrect or empty
+submissions dismiss the PIN dialog and show Access Denied; correct submissions
+open the editor. The PIN field is masked, not saved in instance state, and uses a
+secure dialog window. The existing screen-lock credential check still protects
+saving/resetting changes. A hardcoded PIN/hash is a convenience gate, not an APK
+extraction-resistant authentication secret. GitHub-only configuration still has no
+serverBaseUrl; the earlier server variant retains its serverBaseUrl editor.

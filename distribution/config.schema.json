@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mesh remote configuration",
+  "type": "object",
+  "required": ["serverBaseUrl", "latestVersionCode", "latestVersionName", "apkDownloadUrl", "forceUpdate", "releaseNotes", "telemetryEndpoint"],
+  "additionalProperties": false,
+  "properties": {
+    "serverBaseUrl": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048},
+    "latestVersionCode": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "latestVersionName": {"type": "string", "minLength": 1, "maxLength": 64},
+    "apkDownloadUrl": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048},
+    "forceUpdate": {"type": "boolean"},
+    "releaseNotes": {"type": "string", "maxLength": 16384},
+    "telemetryEndpoint": {"type": "string", "pattern": "^/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$"},
+    "apkSha256": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"}
+  }
+}

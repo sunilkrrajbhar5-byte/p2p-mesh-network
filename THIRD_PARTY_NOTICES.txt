@@ -1,0 +1,138 @@
+STEP 2 PROVENANCE AND LICENSES
+
+WifiDirectManager.kt is a modified architectural adaptation, not an unchanged
+upstream engine. Its TrebleShot-derived portions are GPL-2.0-or-later; the new
+Step 2 source files are also supplied under GPL-2.0-or-later. Retain these notices
+and the included license texts when distributing this adaptation.
+
+1. TrebleShot Android
+   Repository: https://github.com/trebleshot/android
+   Inspected revision: f9c927e5b82f3f9cd968e5ddf31109f8e5e8b9e4
+   Copyright (C) 2019 Veli Tasalı (HotspotManager.kt, Connections.kt)
+   Copyright (C) 2020 Veli Tasalı (P2pDaemon.kt)
+   License: GNU GPL version 2 or any later version.
+   Full text: licenses/TrebleShot-GPL-2.0.txt
+
+   Source directory:
+   https://github.com/trebleshot/android/tree/f9c927e5b82f3f9cd968e5ddf31109f8e5e8b9e4/app/src/main/java/org/monora/uprotocol/client/android/util
+
+   Adapted from HotspotManager.OreoHotspotManager:
+   - application-context WifiManager ownership;
+   - startLocalOnlyHotspot(callback, main-thread Handler);
+   - retain LocalOnlyHotspotReservation onStarted;
+   - read its configuration, close it on shutdown, handle onStopped/onFailed.
+   Adapted from P2pDaemon and Connections:
+   - WifiP2pManager channel and broadcast receiver lifecycle;
+   - platform action listeners, peer updates, location/permission gating.
+   Removed legacy reflection-based hotspot manipulation and settings mutation.
+
+   The inspected P2pDaemon has commented-out discovery operations. There is no
+   automatic P2P-to-LOHS fallback there. Fallback, modern permission checks,
+   coroutine integration, deadlines and bridge management are new in this work.
+   Neither this source nor upstream establishes an all-OEM compatibility guarantee.
+
+2. Monora CoolSocket 2.0-rc16
+   Repository: https://github.com/libcoolsocket/java
+   Copyright 2020-2021 monora
+   License: MIT; full notice: licenses/CoolSocket-MIT.txt
+   Exact inspected source artifact:
+   https://repo.maven.apache.org/maven2/org/monora/coolsocket/core/2.0-rc16/core-2.0-rc16-sources.jar
+   Adapted structure from:
+   - org/monora/coolsocket/core/config/DefaultConfigFactory.java
+   - org/monora/coolsocket/core/server/DefaultServerExecutor.java
+   - org/monora/coolsocket/core/server/DefaultConnectionManager.java
+   The original bind/configure/accept/per-client-dispatch/finally-close structure
+   is retained with coroutine jobs, queues, bounded admission and cancellation.
+   Its JSON framing is replaced by the existing Step 1 MeshPacket codec.
+
+3. Monora uprotocol (reference only, no source copied)
+   TrebleShot depends on org.monora.uprotocol:core:0.1.0-ALPHA35; its transport
+   extends CoolSocket and upgrades connections to TLS. Inspected artifact:
+   https://repo.maven.apache.org/maven2/org/monora/uprotocol/core/0.1.0-ALPHA35/core-0.1.0-ALPHA35-sources.jar
+   Our requested raw TCP transport is NOT equivalent to that authenticated TLS
+   protocol and is not compatible with TrebleShot or ShareikT on the wire.
+
+Changes made in 2026: the code was rewritten/adapted into Kotlin coroutine
+pipelines, uses current public Android APIs, and adds application-specific
+membership, heartbeats, route expiry, automatic owner fallback and optional
+adjacent-network connection handling. No routing packet format was added.
+
+STEP 3 ADDITION
+The existing uprotocol 0.1.0-ALPHA35 source artifact was inspected again at
+org/monora/uprotocol/core/transfer/Transfers.java, receive(). That path opens a
+PersistenceProvider output stream, writes transfer buffers to it, persists item
+status and installs received content. This application replaces that consumer
+boundary with RelayPacketFilter's borrowed direct-buffer local/next-hop callback.
+Those persistence, file descriptor, resume and content-install operations are not
+included. This is an architectural adaptation, not a claim that TrebleShot itself
+ships a silent mesh relay. No Transfers.java source was copied.
+
+RelayPacketFilter.kt and SilentRelayService.kt are supplied under GPL-2.0-or-later,
+consistent with the existing adapted connection layer. Step 3 also modifies the
+existing packet codec to version 2 remaining-TTL semantics and updates the manager
+to support synchronous raw-frame forwarding with the same socket write lock as
+heartbeats. It does not introduce a second framing or media-reassembly engine.
+
+STEP 4 ADDITION
+Re-inspected Transfers.java receive() and send() in the same uprotocol artifact.
+Upstream uses transfer IDs, source-length checks, bounded stream reads, offsets
+and an endpoint persistence provider. The requested 512 KiB/fragment metadata,
+SHA-256 completion check, reverse mesh breadcrumbs and two-lane scheduler are
+new application-specific adaptations, not features copied verbatim from upstream.
+ChunkManager.kt retains the streaming/offset lifecycle using standard FileChannel
+and RandomAccessFile. It does not reproduce upstream resume/database semantics.
+AckManager.kt and PriorityQueueManager.kt integrate with the existing mesh codec
+and connection engine. All three new source files are GPL-2.0-or-later, consistent
+with this adapted project. No additional upstream source was copied in Step 4.
+
+STEP 5 ADDITION
+Reference: https://github.com/yoyo-san/bmo
+Revision: 51939eb24dd6d9b88d2518f44dcbda2457d2624f
+Inspected app/src/main/java/bmo/samplewifi/TalkManager.java and VoiceManager.java.
+License: MIT; upstream notice preserved in licenses/bmo-MIT.txt.
+PttVoiceEngine retains the independent capture/playback-loop architecture using
+AudioRecord and MODE_STREAM AudioTrack. Its MediaCodec AAC, bounded queues,
+PTT1 media payload and lifecycle ownership are new adaptations, not copied
+upstream capabilities. Upstream raw PCM and sentinel socket protocol are not used.
+VideoNoteEngine uses official CameraX and Media3 APIs, Apache-2.0 dependencies.
+The two new engines are GPL-2.0-or-later, consistent with the adapted application.
+This step does not claim proven OEM interoperability or guaranteed audio latency.
+
+STEP 6 ADDITION
+Compose screen and UI adapter sources are GPL-2.0-or-later, consistent with this
+application. They use AndroidX Compose Material 3, Activity and Lifecycle APIs
+(Apache-2.0 dependencies). No third-party UI source/template was copied. The
+existing identity store gained a non-creating read method, and the chunk manager
+gained an optional completed-write progress callback; wire formats are unchanged.
+
+UNIVERSAL GATEWAY ADDITION
+NanoHTTPD core and NanoWSD source: org.nanohttpd artifacts version 2.3.1,
+https://repo.maven.apache.org/maven2/org/nanohttpd/
+License: BSD-3-Clause, preserved in vendor/NanoWSD.java and
+licenses/NanoHTTPD-BSD-3-Clause.txt. The WebSocket framing/handshake implementation
+is reused, not rewritten. Local changes bound frames to 65,543 bytes before
+allocation, bound cumulative fragmented messages and fragment counts, and reject
+unmasked client frames. Use this source instead of a duplicate WebSocket jar.
+Gateway, desktop host and browser adapter source is GPL-2.0-or-later, consistent
+with the project. Browser capture/playback uses standard MediaRecorder/Web Audio;
+Android container playback uses MediaExtractor/MediaCodec. No codec engine is
+copied or hand-written. Desktop org.json:json:20240303 is an external dependency;
+Android uses its built-in org.json implementation.
+
+REMOTE CONTROL ADDITION
+Remote-control Kotlin, distribution server and dashboard additions are original
+GPL-2.0-or-later project source. AndroidX Security Crypto and WorkManager are
+Apache-2.0 dependencies. APK cryptographic verification uses Google's apksig 8.7.3
+(com.android.tools.build:apksig), Apache-2.0, rather than a custom verifier.
+https://android.googlesource.com/platform/tools/apksig/
+Distribution uses the Node.js standard library, including node:sqlite; no external
+Node package source is copied into this bundle. Include runtime/dependency license
+notices when packaging the final application and server runtime.
+
+GITHUB-NATIVE ADDITION
+github-native Android controls, Pages distribution adapter/dashboard, workflow and
+integration launcher are GPL-2.0-or-later project additions. The existing mesh and
+gateway transports are unchanged. Gradle 8.11.1 wrapper scripts/JAR are distributed
+under Apache-2.0; wrapper source: https://github.com/gradle/gradle/tree/v8.11.1 .
+The wrapper JAR and distribution are checksum-verified. Android dependencies retain
+their upstream licenses; include their notices when distributing compiled APKs.

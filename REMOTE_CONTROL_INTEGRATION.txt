@@ -1,0 +1,209 @@
+REMOTE CONFIGURATION, UPDATES AND DISTRIBUTION ANALYTICS
+
+STATUS AND SCOPE
+These are source modules for the existing com.example.mesh bundle, not a newly
+assembled APK. Existing mesh/socket implementations are unchanged. The onboarding
+screen has one optional remoteControls composable slot; existing callers compile.
+Production deployment requires your URLs, release artifacts, signing key, HTTPS
+host, secrets, Android application wiring and device validation described below.
+
+ANDROID DEPENDENCIES
+Keep the existing Kotlin 2.1.20, coroutines 1.10.2, Compose/Activity/Lifecycle/Core
+dependencies from STEP6_INTEGRATION.txt. minSdk 26; compileSdk 35 or later.
+In your app build.gradle.kts, repositories google() and mavenCentral():
+
+implementation("androidx.security:security-crypto:1.1.0")
+implementation("androidx.work:work-runtime-ktx:2.10.1")
+implementation("com.android.tools.build:apksig:8.7.3")
+
+security-crypto is deprecated upstream but used here to satisfy the requested
+EncryptedSharedPreferences contract. Never replace a failed encrypted store with
+plaintext or silently regenerate an existing installation identity.
+Android provides org.json: do NOT add the desktop org.json jar to the APK.
+Keep WorkManager's default manifest initializer, or initialize WorkManager yourself
+before constructing TelemetryTracker if your application disables that initializer.
+apksig is Apache-2.0 licensed; include dependency licenses in your app notices.
+
+Copy RemoteConfig.kt, RemoteInternet.kt, DynamicConfigManager.kt,
+AppUpdateManager.kt, TelemetryTracker.kt and RemoteControlUi.kt into the app source
+package. Copy remote-res/xml/* into app/src/main/res/xml. Merge
+RemoteControlManifest.xml into the app manifest. Preserve existing backup exclusions
+when merging the supplied backup rules. The telemetry database is in noBackupFilesDir;
+encrypted preferences must be excluded from both cloud backup and device transfer.
+Only cache/updates is exported through the non-exported FileProvider.
+
+CONFIGURATION
+Edit distribution/config.json and publish it as config.json in a public GitHub
+repository. Use the canonical raw.githubusercontent.com URL, not a GitHub HTML page.
+Replace every YOUR_OWNER/YOUR_REPOSITORY and example domain before deployment.
+Keep a copy in app/src/main/assets/config.json as the bootstrap fallback.
+config.schema.json specifies the seven requested fields and optional apkSha256.
+Set apkSha256 to the SHA-256 of the exact uploaded APK for additional integrity
+checking. HTTPS and installed-app certificate verification remain mandatory even
+when that optional hash is omitted. Never place passwords or tokens in public JSON.
+
+serverBaseUrl must be a public HTTPS origin/base URL. For this supplied server use
+an origin without a path prefix. telemetryEndpoint is an absolute path prefix and
+the client appends /install. Remote control rejects local/private network addresses;
+it is separate from the offline gateway and its trusted local HTTPS certificate.
+Protect the GitHub account/repository publishing the control file. Configuration is
+trusted through HTTPS; it is not independently signed. A repository compromise can
+change update policy and telemetry destination, but cannot authorize a differently
+signed APK. Exact signer matching intentionally rejects signing-key rotation.
+
+APPLICATION WIRING
+Create exactly one application-scoped instance of each manager. Their factories
+are suspend functions; call from an application-owned coroutine, retain the results
+in your application container/ViewModel, and expose readiness/error to the UI:
+
+val fallback = withContext(Dispatchers.IO) {
+    application.assets.open("config.json").bufferedReader().use {
+        RemoteConfig.parse(it.readText())
+    }
+}
+val config = DynamicConfigManager.create(application,
+    "https://raw.githubusercontent.com/YOUR_OWNER/YOUR_REPOSITORY/main/config.json",
+    fallback)
+val updates = AppUpdateManager.create(application, config,
+    installedCode = BuildConfig.VERSION_CODE.toLong())
+val telemetry = TelemetryTracker.create(application, config, BuildConfig.VERSION_NAME)
+
+BuildConfig is YOUR app's generated class, not this library package's class.
+You may omit installedCode: the manager reads the installed package version through
+PackageManager. Pass your application versionName to TelemetryTracker.
+Factories can fail if Keystore/storage is unavailable; surface a retry for these
+optional remote features while keeping offline mesh initialization independent.
+recordLaunch runs once during tracker creation. On future process launches recreate
+the container; do not instantiate trackers repeatedly from recomposition.
+
+In your existing ProfileOnboardingScreen invocation add:
+remoteControls = {
+    RemoteVersionControl(config, updates)
+    TelemetryPreference(telemetry)
+}
+At your Activity composition root, inside MaterialTheme and outside navigation:
+RemoteUpdateDialog(updates)
+
+Seven taps on the version within five seconds opens the local admin dialog. Saving
+or removing an override requires the device screen-lock credential. The gesture
+itself is not authentication. An override changes serverBaseUrl only, persists
+across refreshes, and can be reset to the published value. It does not modify mesh
+routes, the master JSON URL, or the APK URL. Device-owner credential authorization
+is local administration; distribution-dashboard credentials are separate.
+
+Config refreshes when a validated Internet network becomes available and every
+six hours while online. Check for updates explicitly refreshes it too. Last known
+good config is retained on failure. HTTP and DNS use Network.openConnection and
+Network.getAllByName for that validated network, never bindProcessToNetwork.
+No new traffic, timers or buffers are added to the mesh socket engines. Remote
+features still consume their own CPU/network resources; literal zero app overhead
+is not possible. HTTPS requests time out after 15 seconds per connect/read.
+
+UPDATE FLOW
+Higher versionCode offers an update. Optional updates download after user selection;
+forceUpdate starts downloading when validated Internet is available and keeps the
+online prompt non-dismissible. Offline use remains available. A failed forced
+download exposes Retry; it does not loop continuously. Android still requires user
+approval to enable unknown-app installs and approve package installation.
+Downloads stream in 64 KiB buffers, are capped at 256 MiB, and check Content-Length,
+optional SHA-256, APK cryptographic signatures, exact installed signer set, package
+name and version code. They are checked again before launching the installer.
+Use correctly signed release APKs with increasing version codes, not arbitrary
+debug builds. Installed and update APKs must share the same signing certificate.
+FileProvider grants a temporary read URI to ACTION_VIEW with APK MIME type.
+After allowing unknown-app installation, return and tap Install again.
+Download cancellation/process death can require restarting the download; no resume
+is claimed. Stale partial files are removed when the manager is recreated. This is
+an app-scoped coroutine download, not a guaranteed background download service.
+Use this updater for your direct-distribution flavor; store distribution may require
+a different update mechanism and permission declarations.
+
+TELEMETRY
+A random UUID persists in encrypted preferences and survives application updates.
+Clearing app data/uninstalling creates a new identity. No hardware IDs, mesh IDs,
+messages or SSIDs are collected. Metrics are pseudonymous, not provably anonymous.
+Collection defaults OFF; the onboarding switch enables it. If your product has
+already obtained consent through another flow, create(enabledByDefault = true).
+That argument applies only before the preference has been saved.
+An actual launch queues one event per UTC day/app version while enabled. No worker
+creates artificial activity events. The SQLite queue caps at 32 events and expires
+events after 90 days. Connectivity callbacks flush it in-process; WorkManager
+provides persisted, network-constrained retries after process death. Disabling
+clears queued events and cancels work; already delivered requests cannot be undone.
+The API payload is exactly installId, os, osVersion, appVersion, timestamp. Android
+uses ANDROID. The endpoint also accepts DESKTOP and WEB with the same UUID-v4/ISO
+timestamp contract; those applications must call it from their own launch/consent
+flow. This change does not silently instrument the existing desktop/web gateway.
+Cross-origin browser callers need an explicit, restricted CORS policy at deployment;
+the supplied server intentionally enables no cross-origin browser access by default.
+
+NODE DISTRIBUTION SERVER
+Node 24+ with built-in node:sqlite; no npm dependencies. From distribution/:
+  copy .env.example .env
+  [edit .env and config.json with real values and independently random secrets]
+  npm test
+  npm start
+Use a persistent writable volume for DB_PATH. Back up SQLite consistently using
+SQLite-aware tooling; keep INSTALL_ID_HMAC_KEY stable across restarts/backups.
+Run one service instance for a SQLite file; use a shared database before horizontal
+scaling. Never commit .env, databases, signing material or private keys.
+The server bootstraps from config.json, fetches CONFIG_URL at startup and every five
+minutes, and saves validated remote config in SQLite. Invalid/unavailable refreshes
+retain the last good value, including after restart. A changed telemetryEndpoint
+replaces the server's route; clients retain failed events until their config catches up.
+
+Expose the loopback service through a trusted HTTPS reverse proxy. An example
+Caddyfile is supplied; configure PUBLIC_DOMAIN and DNS and run Caddy under your
+service manager. Keep port 3000 private. TRUST_LOOPBACK_PROXY=true is appropriate
+only when the local proxy overwrites X-Forwarded-For, as shown. Do not expose HTTP
+Basic admin authentication over plaintext or publish the upstream listener.
+
+GET /download/apk increments android_downloads and redirects to the configured APK.
+Android user-agent requests are also counted separately. A desktop browser may
+legitimately download the APK, so UA does not block the route. HEAD does not count.
+GET /download/desktop increments desktop_downloads and redirects to the supplied
+desktop release bundle. These are download REQUESTS, not completed transfers.
+POST /api/v1/telemetry/install accepts bounded events, hashes IDs with a server HMAC,
+and upserts by platform/identity. Duplicate/replayed timestamps are idempotent.
+GET /admin_stats.html and GET /admin/api/stats require HTTP Basic credentials.
+The dashboard polls every five seconds while visible. It reports observed unique
+installations and activity timestamps within 30 days. Delayed old events do not
+create current activity. Observations older than 365 days are pruned daily.
+These are not OS-confirmed installs/uninstalls or exact unique-person counts.
+Public clients can forge events; rate limits and bounded bodies mitigate abuse but
+do not provide installation attestation. Download counters include retries/bots.
+Server requests are limited to 120 per client address per minute. Admin authentication
+and CSP protect the dashboard; no admin secret is embedded in HTML or public JSON.
+
+VERIFICATION AND REMAINING RELEASE CHECKS
+All Kotlin source files compile together against Android/AndroidX stubs and the
+specified libraries. RemoteControlChecks exercises config parsing and rejection.
+node --test distribution/server.test.mjs exercises authentication, redirects, HEAD,
+invalid/duplicate events, platform counts, database persistence and config caching.
+This workspace has no Gradle APK application module, so these checks do not replace
+an assembleRelease/R8 build or installation/device tests. Before release test:
+  - Offline cold start and Internet recovery with a live hotspot/mesh connection.
+  - Process death/reboot, WorkManager flush, consent changes and blocked endpoints.
+  - Valid signed APK, corrupt APK, wrong signer/package/version and unknown-app flow.
+  - Required/optional update UI, cancellation, rotation and screen-lock admin flow.
+  - Backup/restore exclusions, TLS hosting, disk persistence and secret rotation.
+No public hosting, GitHub release publication or device installation is performed.
+
+REFERENCE DOCUMENTATION
+https://developer.android.com/reference/android/net/Network#openConnection(java.net.URL)
+https://developer.android.com/reference/android/content/pm/PackageManager#canRequestPackageInstalls()
+https://developer.android.com/reference/androidx/core/content/FileProvider
+https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started
+https://android.googlesource.com/platform/tools/apksig/+/refs/heads/main/src/main/java/com/android/apksig/ApkVerifier.java
+https://nodejs.org/download/release/latest-v24.x/docs/api/sqlite.html
+
+ADMIN PIN GATE UPDATE
+Seven version taps now show Admin PIN Required before the configuration editor.
+Default PIN: 1990. Change ADMIN_PIN_SHA256 in the applicable DynamicConfigManager.kt
+companion object to configure another 4-12 ASCII-digit PIN. Incorrect or empty
+submissions dismiss the PIN dialog and show Access Denied; correct submissions
+open the editor. The PIN field is masked, not saved in instance state, and uses a
+secure dialog window. The existing screen-lock credential check still protects
+saving/resetting changes. A hardcoded PIN/hash is a convenience gate, not an APK
+extraction-resistant authentication secret. GitHub-only configuration still has no
+serverBaseUrl; the earlier server variant retains its serverBaseUrl editor.

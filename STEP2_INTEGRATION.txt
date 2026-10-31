@@ -1,0 +1,190 @@
+STEP 2: CONNECTION AND CLUSTER MANAGEMENT
+
+Step 4 integration note: the updated WifiDirectManager also requires
+PriorityQueueManager.kt. Use the complete Step 4 source bundle for current files.
+
+FILES
+Copy WifiDirectManager.kt, ClusterController.kt and MeshRoutingTable.kt beside
+MeshPacket.kt, under src/main/java/com/example/mesh. After the Step 3 update,
+also include RelayPacketFilter.kt (the manager's optional raw receiver).
+The package is shared with
+Step 1. Step2Checks.kt belongs in a separate JVM test source set, not the APK.
+Read THIRD_PARTY_NOTICES.txt and retain licenses/ when distributing.
+
+BUILD
+Kotlin 2.1.20 or a compatible newer compiler; compileSdk >= 34, targetSdk >= 34.
+Step 2 raises minSdk to 26 (public local-only hotspot). Step 1 remains API 23+.
+Use google() and mavenCentral(). Add:
+
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+
+Keep Step 1's security-crypto dependency. UI examples below assume the usual
+AndroidX Activity Result and lifecycle coroutine integrations in the host app.
+
+MANIFEST (merge these declarations into the existing manifest)
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+<uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
+    android:usesPermissionFlags="neverForLocation" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="32" />
+<uses-feature android:name="android.hardware.wifi.direct" android:required="false" />
+<uses-feature android:name="android.hardware.wifi" android:required="true" />
+
+INTERNET authorizes local TCP sockets as well; this implementation does not contact
+the internet. neverForLocation assumes the app does not derive physical location.
+It does not call startScan/getScanResults (which have additional location rules).
+
+LIFECYCLE / PERMISSIONS
+Own the manager from a visible Activity or an already-started connectedDevice
+foreground service. Before starting Wi-Fi operations:
+
+val permissions = manager.missingPermissions()
+// If nonempty: launch ActivityResultContracts.RequestMultiplePermissions().
+// In its result callback, check missingPermissions() again, then start the operation.
+// If empty: start immediately in a lifecycle/service coroutine.
+
+Android 12 precise location requests must include both fine and coarse location.
+Android 13/14 uses Nearby Wi-Fi Devices. Permission denial is surfaced, not used
+as a reason to silently switch radios. Wi-Fi discovery can require Location mode
+to be enabled in system settings even when the runtime nearby permission is granted.
+
+For ongoing operation outside a visible Activity, the host must implement a
+foreground service and notification; this component does not silently create one.
+Android 14+: declare FOREGROUND_SERVICE and FOREGROUND_SERVICE_CONNECTED_DEVICE,
+and android:foregroundServiceType="connectedDevice" on that service. Follow the
+platform rules for starting foreground services while the app is visible.
+No claim is made that a service overrides OEM battery restrictions or Doze.
+
+BOOTSTRAP / OWNER
+Create one shared cluster UUID and exchange it plus the owner's persisted identity
+using your invitation UI (QR/BLE/manual exchange). A client must not invent its own
+cluster UUID or guess the owner identity. On the owner:
+
+val cluster = ClusterController(localId, clusterUuid, ownerId = localId)
+val manager = WifiDirectManager(applicationContext, cluster)
+val result = manager.startOwner() // suspend, may return HotspotOwner on fallback
+
+Collect manager.state and manager.connections as StateFlows. For HotspotOwner,
+display/encode its invitation privately; it contains the OS-generated SSID and
+password plus the cluster/owner identity. The system chooses the LOHS credentials.
+P2P startup action/group timeouts trigger teardown attempts then LOHS automatically.
+The owner also attempts LOHS after an established Direct group is lost.
+
+CLIENT
+val cluster = ClusterController(localId, clusterUuid, ownerId)
+val manager = WifiDirectManager(applicationContext, cluster)
+manager.discoverPeers()
+// Collect manager.peers; user selects the intended owner's Wi-Fi Direct address.
+manager.connectDirect(selectedDevice.deviceAddress, fallback = optionalHotspotInvitation)
+
+If Direct fails, a supplied fallback invitation is used. Otherwise state becomes
+NeedsHotspotInvitation. Receive the owner's invitation, then:
+manager.joinHotspot(invitation)
+
+The client cannot remotely force the owner to start a hotspot. Both sides must
+coordinate that transition through the invitation/bootstrap flow. Android 10+
+WifiNetworkSpecifier joins require the OS user's approval. For API 26-28, join
+through system Wi-Fi settings and pass the selected ConnectivityManager Network
+and discovered owner address to connectOnNetwork(network, ownerAddress).
+
+Address handling: Direct uses WifiP2pInfo.groupOwnerAddress. Hotspot joining uses
+an explicit invitation address, or the requested Network's IPv4 default-route
+gateway from LinkProperties. It does NOT assume 192.168.43.1 or 192.168.49.1.
+If an OEM omits a gateway, supply the discovered ownerAddress in the invitation.
+LOHS listening binds wildcard because there is no portable public host-interface
+API. The handshake verifies the configured cluster/owner IDs, not cryptographic
+identity. Client sockets are bound per Network, never process-wide.
+
+PACKETS AND HEARTBEATS
+manager.packets is a bounded Flow with ONE application collector. It delivers
+non-heartbeat MeshPackets. UI/state observation uses StateFlows separately.
+val queued = manager.send(connection.sessionId, packet)
+
+send consumes one hop by calling forNextHop(). Do not increment hops beforehand.
+true means queued, not delivered or acknowledged. A full output queue disconnects
+the slow peer; a slow input consumer applies bounded backpressure.
+
+Connection-control messages reuse HEARTBEAT (no new packet type):
+- clusterId is the link's cluster; targetId is the receiving peer;
+- wire v2: hopLimit=0, currentHops=1 on wire (created with TTL=1, then sent);
+- client HELLO/periodic ping payload is empty;
+- owner WELCOME/periodic ping payload is one byte: assigned role (1 client, 2 bridge).
+The owner admits only after a valid HELLO; duplicates and a fifth client are closed.
+Step 3 changes TTL to a remaining budget and upgrades MeshPacket.VERSION to 2.
+Every peer must use the updated codec and manager. Version 1 frames are rejected.
+Connection/control identities are not authenticated by CRC32. Raw TCP here does
+not retain TrebleShot's TLS security. Add authenticated transport before treating
+nicknames, cluster IDs, or route advertisements as trusted identities.
+
+Every 3 seconds the manager queues a heartbeat to each admitted link. Only received
+valid heartbeats refresh direct route freshness and session liveness. The routing
+table uses elapsedRealtime on Android, so wall-clock changes cannot extend routes.
+Routes expire at 30 seconds; the maintenance loop detects this on its next tick
+(nominally 30-33 seconds, subject to OS scheduling). Socket inactivity timeout is
+also 30 seconds. Handshakes, writes, network joins and P2P actions are bounded.
+Expired/disconnected next hops remove all dependent routes and release membership.
+
+MeshRoutingTable.learn() is an API for a later validated route-advertisement layer.
+It does not flood advertisements or infer trusted routes from arbitrary incoming
+data. A direct neighbor heartbeat does not renew distant route advertisements.
+No multi-hop routing/deduplication/media engine is introduced in this step.
+
+CLUSTER LIMIT AND BRIDGE
+Five total means ONE owner + FOUR clients. The fourth admitted client (fifth device
+including the owner) receives BRIDGE. A literal fifth client would be a sixth device
+and is rejected. The count is enforced atomically at application TCP admission;
+ordinary Android apps cannot set a portable hard Wi-Fi association limit.
+
+The bridge retains its home-owner connection and can call:
+val sessionId = manager.connectAdjacent(otherClusterHotspotInvitation)
+
+This uses a separate requested Wi-Fi Network plus its socket factory. The adjacent
+owner applies its own four-client limit. The bridge appears as one of those clients.
+The bridge is marked ACTIVE only after the adjacent handshake and another heartbeat
+from the home owner. Both links remain monitored. A home-link loss tears down the
+adjacent link and clears bridge state. A disconnected bridge is replaced when the
+next client fills the fourth slot. A bridge keeps its designation if another client
+leaves. A second P2P group is never requested as a concurrency workaround.
+
+Concurrent P2P/STA or STA/STA support is device/firmware-specific. Android's STA
+concurrency capability query does not promise P2P+STA concurrency. If requesting
+the adjacent network drops the home link, the attempt fails and the bridge is not
+declared active. The user may need to rejoin the home network. Reliable operation
+on nonconcurrent hardware needs a later store-and-forward/disconnect-rejoin layer.
+Automatic adjacent discovery, invitation exchange, forwarding and store-and-forward
+are outside this connection-management step.
+
+CLEANUP
+Call manager.stop() to close all sockets, unregister network requests, release the
+hotspot reservation and tear down the Direct group. Call manager.close() when its
+owner is destroyed to additionally unregister the receiver and cancel its scope.
+These are suspending calls. Cancel any in-progress start/join coroutine before
+closing; lifecycle operations are serialized. Pending late hotspot callbacks close
+their reservations. No hidden/reflection APIs or vendor-specific IP tables are used.
+
+VALIDATION
+Compiled the new production sources plus MeshPacket.kt against Android API 34 with
+Kotlin 2.1.20 and coroutines 1.10.2. Ran Step2Checks.kt on the JVM: concurrent
+admission, bridge assignment/release, exact route-expiry boundaries, dependent
+route invalidation, 3-second heartbeat cadence and real loopback TCP frame exchange.
+These checks do NOT execute Android Wi-Fi callbacks or establish OEM compatibility.
+
+Device acceptance checks still needed on Samsung, Xiaomi, Realme and OnePlus:
+- owner + four clients; fifth-client rejection; duplicate identity rejection;
+- deny/revoke Nearby Wi-Fi and test Location mode disabled;
+- force Direct setup failure, approve hotspot join, verify actual gateway use;
+- toggle Wi-Fi, stop/restart hotspot, kill/restart service, and cancel during join;
+- screen-off/background behavior and missing heartbeats;
+- bridge second-network attempt with both supported and unsupported concurrency.
+
+REFERENCES
+TrebleShot revision and adaptation map: THIRD_PARTY_NOTICES.txt
+https://developer.android.com/develop/connectivity/wifi/wifip2p
+https://developer.android.com/develop/connectivity/wifi/localonlyhotspot
+https://developer.android.com/develop/connectivity/wifi/wifi-bootstrap
+https://developer.android.com/develop/connectivity/wifi/wifi-permissions
+https://developer.android.com/reference/android/net/wifi/WifiManager#isStaConcurrencyForLocalOnlyConnectionsSupported()

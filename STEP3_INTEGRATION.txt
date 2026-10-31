@@ -1,0 +1,179 @@
+STEP 3: SILENT IN-MEMORY RELAY
+
+Step 4 integration note: the updated transport/service also require ChunkManager,
+AckManager and PriorityQueueManager. The per-socket writer mutex was replaced with
+a shared two-lane scheduler; raw forwarding still awaits actual write completion
+while holding its buffer lease. Optional endpoint file caching is now enabled via
+LocalBinder.enableFileTransfers(). Transit payloads remain memory-only. Refer to
+STEP4_INTEGRATION.txt for current source dependencies and endpoint setup.
+
+COPY / BUILD
+Use these production files together in src/main/java/com/example/mesh:
+  MeshPacket.kt                  UPDATED: wire version 2, remaining TTL, raw codec API
+  WifiDirectManager.kt           UPDATED: optional raw receiver and synchronous writes
+  ClusterController.kt
+  MeshRoutingTable.kt
+  RelayPacketFilter.kt           NEW
+  SilentRelayService.kt          NEW
+IdentityGenerator.kt remains available for app bootstrap; the relay service does
+not call it or write preferences. The relay consumes the existing persisted ID.
+
+Build assumptions: Kotlin 2.1.20+, minSdk 26, compileSdk/targetSdk at least 34.
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+Keep Step 1's identity dependency if using IdentityGenerator.
+Merge AndroidManifest.step3.xml into your manifest, retaining existing app entries
+and backup exclusions. Keep the service in the default process, exported=false.
+Step3Checks.kt is a JVM check program, not production APK source.
+
+WIRE FORMAT MIGRATION -- REQUIRED ON ALL PEERS
+MeshPacket.VERSION is now 2. The compact field layout is unchanged but hopLimit
+now means remaining TTL. Each outgoing hop decreases hopLimit and increases
+currentHops by one. TTL zero can be delivered locally but cannot be forwarded.
+forNextHop() does both; the raw relay's advanceFrame() does both in place and
+recomputes CRC32. The manager raw writer must NOT call forNextHop() again.
+The budget invariant is 1 <= hopLimit + currentHops <= 25. Heartbeats are created
+with (TTL=1,hops=0), then sent as (TTL=0,hops=1). v1 frames are rejected, preventing
+older fixed-budget nodes from accidentally extending a v2 packet's lifetime.
+Both null and the literal string "BROADCAST" are accepted broadcast targets.
+
+SERVICE USAGE
+Request Wi-Fi permissions while the Activity is visible before starting:
+- Android 13+: NEARBY_WIFI_DEVICES; request POST_NOTIFICATIONS to show the status
+  notification in the drawer. Android still requires an FGS notification if denied.
+- Android 12 and earlier: fine and coarse location, as described in Step 2.
+Android 14+: the manifest includes connectedDevice service type and its foreground
+service permission. CHANGE_WIFI_STATE fulfills a declared prerequisite for this
+service type. Background-start restrictions still apply; start from a user action
+in a visible Activity. No boot receiver or background-start bypass is supplied.
+
+Start and bind from the Activity (store the ServiceConnection to unbind later):
+
+SilentRelayService.start(this)
+val connection = object : android.content.ServiceConnection {
+    override fun onServiceConnected(name: android.content.ComponentName, service: android.os.IBinder) {
+        val relay = service as SilentRelayService.LocalBinder
+        lifecycleScope.launch {
+            relay.configure(
+                localMyId = persistedIdentity,
+                clusterId = sharedClusterUuid,
+                ownerId = sharedOwnerIdentity,
+                localConsumer = appLocalConsumer
+            )
+            if (persistedIdentity == sharedOwnerIdentity) relay.startOwner()
+            else relay.connectDirect(selectedOwnerDeviceAddress, optionalHotspotInvitation)
+        }
+    }
+    override fun onServiceDisconnected(name: android.content.ComponentName) { }
+}
+bindService(Intent(this, SilentRelayService::class.java), connection, Context.BIND_AUTO_CREATE)
+
+The sample's persistedIdentity/sharedClusterUuid/sharedOwnerIdentity come from
+Steps 1/2; selectedOwnerDeviceAddress and optionalHotspotInvitation come from the
+existing invitation UI. appLocalConsumer is an application-owned implementation
+of RelayPacketFilter.LocalConsumer. Avoid capturing an Activity for the service's
+entire lifetime. A consumer receives a read-only direct ByteBuffer containing only
+the payload plus a metadata header. Read it synchronously during the suspending
+callback; never retain its view or launch work using that view after returning.
+If the actual destination needs its own message model, a deliberately created
+local copy belongs to that consumer and is outside the relay's buffer budget.
+The provided service never saves local or forwarded payloads itself.
+
+configure() is called ONCE per service instance before connecting. On Activity
+rebind, reuse the configured binder and collect its state instead of configuring
+again. State, connections, peers and clusterState are exposed as StateFlows;
+routes exposes the existing routing table for validated route learning.
+Do not collect WifiDirectManager.packets while using this service: relay mode
+intentionally bypasses that heap-backed Flow.
+
+To link a designated bridge after obtaining an adjacent invitation:
+relay.connectAdjacent(adjacentInvitation)
+Hardware concurrency and invitation requirements from Step 2 still apply.
+
+Stop via relay.stop(), the notification Stop action, or
+SilentRelayService.stop(context). Unbind the Activity's ServiceConnection when
+finished observing it. The service is START_NOT_STICKY: it does not persist or
+replay a backlog after process death. Stopping releases CPU/Wi-Fi locks and closes
+the transport. Free buffers are wiped immediately; active buffers are wiped only
+after their read/write operation has exited, preventing use-after-wipe races.
+
+FOREGROUND / POWER SEMANTICS
+Foreground execution gives the service elevated process importance, not real-time
+CPU scheduling or immunity from termination. The ongoing, low-importance channel
+is visible and silent: no sound, vibration or per-transfer notification. The service
+holds a PARTIAL_WAKE_LOCK with a 10-minute timeout renewed every 5 minutes while
+running, and a non-reference-counted Wi-Fi lock; both are released at shutdown.
+On Android 14+, HIGH_PERF Wi-Fi locks map to LOW_LATENCY with that mode's restrictions.
+Neither lock overrides OEM power policy or guarantees screen-off Wi-Fi performance.
+
+RELAY POLICY
+- HEARTBEAT: link-control callback only; never forwarded or placed in duplicate LRU.
+- targetId == localMyId: deliver to local consumer only, including TTL-zero packets.
+- targetId == null or "BROADCAST": deliver locally, then forward to eligible live
+  sessions except ingress if TTL remains. Each outgoing copy consumes the same one hop.
+- other target: never deliver locally; use a fresh known route or a uniquely matching
+  directly connected peer. No route means drop; no disk spool or RAM retry backlog.
+- The next-hop session is already connected to its IP on TCP 8888. Reuse it and its
+  Network binding, rather than creating an unhandshaken socket for each media chunk.
+- Adjacent sessions are eligible only after Step 2 marks the bridge active.
+- The route cache is not a discovery protocol. For distant destinations, a higher
+  layer must install validated routes. This step does not add a custom routing engine.
+
+1000-entry, thread-safe access-order LRU caches packet UUIDs. Duplicate arrivals
+refresh LRU position and are dropped before local delivery or forwarding. Dropped
+no-route and failed-write packets are also remembered until eviction. Deduplication
+is bounded, not permanent; a packet can be seen again after its ID is evicted.
+TTL still bounds circulation. Local-origin send uses the manager's normal send path.
+
+BUFFER OWNERSHIP / ZERO PAYLOAD DISK WRITES
+Default pool: 8 slots. Each owns one direct buffer of 65,543 bytes (the codec's
+maximum frame) and one 8,192-byte heap I/O scratch array: 589,880 bytes total.
+At most 28 slots are allowed: 2,064,580 bytes, below the 2,097,152-byte budget.
+Identity strings, UUID metadata, the LRU, coroutine objects, socket buffers and
+the local consumer are not included in that payload-buffer accounting.
+
+The existing raw Socket InputStream/OutputStream APIs require a byte[] scratch
+adapter. Frames reside in direct RAM; scratch is bounded and overwritten after
+each chunk and in finally. No complete forwarded payload becomes a heap-backed
+MeshPacket or enters the old packets Channel. Handshakes also use the same direct
+pool, rejecting non-control payloads before admission.
+
+Each socket has ONE writer mutex shared by raw forwards and queued heartbeats.
+Raw writes finish before returning; they do not enqueue borrowed buffers. A write
+deadline closes a stuck socket. Once actual I/O begins, cancellation waits for it
+to end before the caller may wipe. Broadcast forwarding uses sequential writes
+with the same frame, wiping after the final intended write completes or fails.
+
+Finally overwrites the entire direct buffer capacity and all scratch bytes, then
+calls clear(). clear() by itself does not erase data. The same wiping runs for
+local-only delivery, duplicates, invalid frames, TTL/no-route drops, exceptions
+and cancellation. No payload logging, persistence provider, file output, media
+installation or database operation exists in the relay/service path.
+
+The guarantee is no application payload disk writes by this relay, plus explicit
+overwriting of buffers it owns. Java/Android cannot promise forensic erasure of
+all runtime copies, kernel TCP buffers, paging, device memory snapshots, or copies
+created by a consumer. Direct memory reclamation is runtime-managed after wiping.
+Socket-write completion means TCP accepted bytes, not remote delivery confirmation.
+
+UPSTREAM ALIGNMENT
+See THIRD_PARTY_NOTICES.txt. TrebleShot's uprotocol Transfers.receive() opens an
+output stream via its persistence provider and saves transfer state. This adaptation
+replaces that consumer boundary with immediate in-memory delivery/forwarding while
+retaining the previously adapted connection lifecycle. It does not invoke that
+file-saving engine, adopt its persistence/resume behavior, or claim wire compatibility.
+
+VALIDATION
+Production Kotlin files compile against Android API 34, Kotlin 2.1.20 and coroutines
+1.10.2. Step3Checks verifies local/unicast/broadcast routing, duplicate filtering,
+access-order 1000-entry LRU, TTL-zero behavior, CRC after decrement, direct/read-only
+buffers, memory budget rejection, malformed/control frames, wipes on success/failure/
+cancellation, and real loopback TCP forwarding. Step 1/2 checks are rerun for v2.
+Foreground-service lifecycle, notifications, Wi-Fi locks and radio behavior still
+need on-device checks. No Samsung/Xiaomi/Realme/OnePlus runtime tests were performed.
+
+PLATFORM REFERENCES
+https://developer.android.com/develop/background-work/services/fgs/service-types
+https://developer.android.com/develop/ui/compose/notifications/notification-permission
+https://developer.android.com/develop/background-work/background-tasks/awake/wakelock
+https://developer.android.com/reference/android/net/wifi/WifiManager
+https://developer.android.com/reference/java/nio/ByteBuffer

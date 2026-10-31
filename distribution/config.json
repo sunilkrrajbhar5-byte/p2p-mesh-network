@@ -1,0 +1,9 @@
+{
+  "serverBaseUrl": "https://distribution.example.com",
+  "latestVersionCode": 2,
+  "latestVersionName": "1.1.0",
+  "apkDownloadUrl": "https://github.com/YOUR_OWNER/YOUR_REPOSITORY/releases/download/v1.1.0/app-release.apk",
+  "forceUpdate": false,
+  "releaseNotes": "Bug fixes and mesh stability updates",
+  "telemetryEndpoint": "/api/v1/telemetry"
+}

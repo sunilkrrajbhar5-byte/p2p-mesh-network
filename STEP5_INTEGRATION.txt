@@ -1,0 +1,168 @@
+STEP 5: FOREGROUND PTT AND VIDEO NOTES
+
+Copy PttVoiceEngine.kt and VideoNoteEngine.kt into com.example.mesh beside the
+Step 4 production files. Step5Checks.kt is a standalone JVM check, not app source.
+This is complete engine source for the existing project, not a standalone APK.
+Use minSdk 26, compileSdk >=35, Kotlin >=2.1.20, and google()/mavenCentral():
+
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+implementation("androidx.camera:camera-camera2:1.4.2")
+implementation("androidx.camera:camera-lifecycle:1.4.2")
+implementation("androidx.camera:camera-video:1.4.2")
+implementation("androidx.camera:camera-view:1.4.2")
+implementation("androidx.media3:media3-transformer:1.5.1")
+implementation("androidx.media3:media3-effect:1.5.1")
+
+These are pinned API versions, not a claim that they are the newest releases.
+VideoNoteEngine uses Media3's UnstableApi; annotate its calling Activity/helper
+with @androidx.media3.common.util.UnstableApi as well. Merge the declarations in
+AndroidManifest.step5.xml with the existing manifest. Request CAMERA and
+RECORD_AUDIO at runtime from a visible Activity using Activity Result APIs.
+The caller handles permission denial before constructing/starting the engines.
+No storage permission is needed for app-cache video files.
+
+LIFECYCLE AND ROUTING
+
+Both engines are Activity-owned, created on the main thread while RESUMED, and
+close permanently on ON_STOP/ON_DESTROY. Recreate them on the next resume. The
+existing connectedDevice service remains a relay; it does not own a microphone
+or camera. No microphone/camera foreground-service type is added by this step.
+Background voice capture would require a separately implemented microphone
+foreground-service lifecycle and the corresponding Android permissions/types.
+
+Keep an application-owned reference for the configured relay's local callback:
+
+val voiceRef = java.util.concurrent.atomic.AtomicReference<PttVoiceEngine?>()
+
+// Once during relay setup, as in Step 3 (callback must not capture an Activity):
+relay.configure(myId, clusterId, ownerId,
+    RelayPacketFilter.LocalConsumer { header, payload ->
+        if (header.type == PacketType.PTT_VOICE) {
+            voiceRef.get()?.consume(header, payload)
+        } else {
+            // Dispatch text/other locally addressed data to your existing consumer.
+        }
+    })
+
+// In the resumed Activity, after RECORD_AUDIO permission:
+val voice = PttVoiceEngine(applicationContext, this, myId, clusterId) { packet ->
+    relay.sendAwait(nextHopSessionId, packet)
+}
+voiceRef.set(voice)
+
+nextHopSessionId must be a current socket session selected from the existing
+route table/connections for the destination. Re-resolve inside the callback if
+routes can change. The packet retains the final recipient, not the hop's ID.
+For cluster broadcast, dispatch to each selected session in parallel; never
+forward back to ingress. The engine does not invent route discovery or sockets.
+The existing sendAwait selects PTT_VOICE's fast lane automatically. Do not wrap
+it in another unbounded queue or use fire-and-forget send() here.
+
+// Main thread pointer-down:
+voice.startTalking(recipientId) // or MeshPacket.BROADCAST
+// Pointer-up, gesture cancel, or before starting video audio:
+voice.stopTalking()
+
+// In onStop, clear the reference; lifecycle already closes the engine.
+voiceRef.compareAndSet(voice, null)
+
+Collect voice.errors in your Activity scope to display microphone/codec/output
+errors. Audio-focus loss closes the engine; recreate on the next explicit user
+interaction while resumed. Playback uses the system's current communication
+route. This engine does not force Bluetooth/speaker routing or alter global
+AudioManager mode. Host UI may select a supported audio route separately.
+The receiver admits one remote speaker at a time (250 ms idle releases it);
+local transmit mutes receive. There is no distributed floor-control protocol.
+
+VOICE FORMAT AND LATENCY
+
+Uses MediaCodec AAC-LC (the requested AAC alternative), 16,000 Hz mono PCM16,
+32 kbit/s. It does not depend on an OEM Opus encoder being available. AAC-LC
+has 1024 samples per access unit: 64 ms at this sample rate. AudioRecord is
+polled in 20 ms pieces; each encoded access unit is sent immediately, normally
+hundreds of bytes. Releasing PTT drops the encoder tail for prompt stopping.
+
+A 15 KiB compressed packet at 32 kbit/s would require about 3.84 seconds of
+speech. Therefore 20 KiB is a payload ceiling, NOT a fill target. Sending
+15-20 KiB batches and achieving <400 ms are incompatible at this bitrate.
+
+Application payload inside the unchanged MeshPacket/CRC envelope, big endian:
+PTT1 magic:u32 | stream UUID:16 | sequence:i32 | presentationTimeUs:i64 |
+one complete raw AAC access unit (no ADTS). Header length 32 bytes. PTT1 fixes
+AAC-LC/16000/mono and AudioSpecificConfig 0x1408; a different codec needs a new
+payload version. There is no new socket/packet engine and no Briar media-wire
+compatibility claim. Relay copies are bounded; no borrowed buffer is retained.
+
+Transmit and receive each retain at most two queued frames. Pending frames
+older than 120 ms are dropped; detected receive backlog over 150 ms is dropped
+until the talk burst goes idle. PCM backlog is limited and sequence gaps reset
+decoder/track buffering. These are latency controls, not a latency guarantee.
+The first packet's one-way network delay cannot be inferred from unsynchronized
+clocks. OEM codec delay, scheduler stalls, Bluetooth and TCP head-of-line
+blocking can exceed 400 ms. Priority applies only between complete wire frames;
+it cannot preempt an active TCP write. Measure mouth-to-ear delay on hardware,
+including while file chunks are transferring. A hard real-time bound requires
+a separately negotiated real-time transport, outside this step's TCP contract.
+
+VIDEO
+
+// Main thread while resumed, with CAMERA and (if used) RECORD_AUDIO granted.
+// previewView comes from your Activity layout; give it a 1:1 layout ratio.
+val video = VideoNoteEngine(applicationContext, this, previewView)
+video.bindPreview() // Front camera; pass DEFAULT_BACK_CAMERA if preferred.
+voice.stopTalkingAndJoin() // Disable the PTT button during recording.
+val note = video.recordNote(withAudio = true) // suspends; never blocks UI thread
+try {
+    files.sendFile(note.file, recipientId, destinationRouteClusterId)
+} finally {
+    note.file.delete() // Caller owns successful outputs; retain if retry is desired.
+}
+
+files is relay.enableFileTransfers() from Step 4. The video file travels through
+the existing chunk manager, PRE_ALERT, SHA-256 verification and reverse ACK.
+Only endpoints touch disk; relay behavior is unchanged. Do not run PTT capture
+and video audio concurrently. stopTalking() is asynchronous; use
+stopTalkingAndJoin() before enabling video audio, with the PTT control disabled.
+
+CameraX limits the source to 10 seconds. Media3 center-crops/scales to 480x480,
+applies an actual circular mask, and exports H.264 + optional AAC into app cache.
+H.264 MP4 has black, not transparent, corners; use circular clipping in playback
+UI if the surrounding UI must show through. Recorded duration is checked within
+9.8-10.1 seconds to allow frame/audio-boundary rounding; short captures fail.
+Export tries 1.6, 1.0, then 0.64 Mbit/s if necessary. Codec, square dimensions,
+duration and strict <3,000,000-byte file size are verified before success.
+Unsupported codecs, camera interruptions, excessive size or export errors throw
+instead of returning a file that violates the contract. Export time depends on
+the device; it is not included in the ten-second recording time. Cancel the
+recordNote coroutine to abort. Intermediate files are cleaned up; a cancelled
+CameraX source is deleted after Finalize releases its writer. Process death can
+leave cache files, so your normal app-cache retention policy should remove old
+mesh-note-source-* and unused mesh-note-* files at a later startup.
+
+VALIDATION
+
+Both files compiled with Kotlin 2.1.20 against Android framework stubs and the
+actual pinned AndroidX JARs. Step5Checks validates payload bounds/malformed
+inputs, borrowed direct-buffer ownership, and the existing mesh frame roundtrip.
+MeshPacketChecks and Step2Checks through Step5Checks all passed. The Step 4
+regression run in this step transferred 1,060,921 bytes through the in-memory
+bridge; the earlier 1 GiB run is documented separately in Step 4.
+This does NOT validate runtime codec, CameraX, Media3 GL, audio latency or OEM
+behavior. On-device checks remain required: actual mouth-to-ear latency under
+file load, recording permission denial, lifecycle interruption, audio-focus
+loss, front/back rotation, export size/duration, and successful verified transfer.
+
+PROVENANCE
+
+The MIT-licensed yoyo-san/bmo TalkManager/VoiceManager split was inspected at
+commit 51939eb24dd6d9b88d2518f44dcbda2457d2624f. We retain the separate
+AudioRecord and streaming AudioTrack architecture; its raw-PCM socket sentinel
+protocol is replaced by MediaCodec and the EXISTING MeshPacket transport.
+No claim is made that upstream contains AAC framing or this latency policy.
+Video uses official CameraX/Media3 APIs, not copied walkie-talkie camera code.
+See THIRD_PARTY_NOTICES.txt and licenses/bmo-MIT.txt.
+
+https://github.com/yoyo-san/bmo/tree/51939eb24dd6d9b88d2518f44dcbda2457d2624f
+https://developer.android.com/media/camera/camerax/video-capture
+https://developer.android.com/media/media3/transformer/transformations

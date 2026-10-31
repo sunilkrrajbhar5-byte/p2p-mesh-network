@@ -1,0 +1,13 @@
+.reference/
+.tools/
+build/
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+.gradle/
+local.properties
+**/build/
+*.keystore
+*.jks
+*.p12
+*.b64
+

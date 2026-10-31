@@ -1,0 +1,97 @@
+STEP 1: ANDROID INTEGRATION
+
+Place MeshPacket.kt and IdentityGenerator.kt in your Android module's
+src/main/java/com/example/mesh directory. Change both package declarations
+if needed. MeshPacketChecks.kt is a standalone test, not production code.
+
+Module build.gradle.kts additions (Google Maven repository required):
+
+android {
+    defaultConfig { minSdk = 23 }
+}
+dependencies {
+    implementation("androidx.security:security-crypto:1.1.0")
+}
+
+EncryptedSharedPreferences is deprecated in AndroidX 1.1.0. It is used here
+as explicitly requested. The Android Keystore master key uses AES256_GCM;
+preference keys use AES256_SIV and values use AES256_GCM. There is no runtime
+internet requirement. Run identity creation on a worker thread, e.g. inside
+an existing withContext(Dispatchers.IO) block. Storage failures propagate.
+Use one owning application process for identity creation/access.
+
+Example:
+val sender = IdentityGenerator(context).getOrCreateIdentity("Alice")
+val packet = MeshPacket(
+    type = PacketType.TEXT,
+    senderId = sender,
+    clusterId = clusterUuid, // shared UUID supplied by cluster membership
+    payload = "Hello".toByteArray(Charsets.UTF_8)
+)
+val frame = packet.forNextHop().toByteArray()
+val received = MeshPacket.fromByteArray(frame)
+
+Nickname suffixes include leading zeroes (000000..999999). They can collide
+and are not authenticated identities. A future authentication layer must
+bind display IDs to keys. CRC32 is corruption detection, not authentication.
+The codec provides no encryption, discovery, routing, deduplication or media
+reassembly. PTT and media bytes remain opaque to this layer.
+
+Step 3 upgraded the wire format to VERSION=2. TTL convention: origin
+currentHops=0 and hopLimit=25; each forNextHop() decreases hopLimit by one and
+increases currentHops by one. A receiver may deliver at hopLimit=0 but must
+not forward. UUID and timestamp are preserved. Upgrade all peers together;
+v1 fixed-budget frames are rejected. null and "BROADCAST" both mean broadcast.
+Step 3 adds UUID duplicate filtering. See STEP3_INTEGRATION.txt.
+
+BACKUP CONFIGURATION (merge with your existing rules)
+
+Application manifest attributes, compileSdk >= 31:
+android:fullBackupContent="@xml/backup_rules"
+android:dataExtractionRules="@xml/data_extraction_rules"
+
+res/xml/backup_rules.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="sharedpref" path="mesh_identity.xml" />
+</full-backup-content>
+
+res/xml/data_extraction_rules.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="mesh_identity.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="mesh_identity.xml" />
+    </device-transfer>
+</data-extraction-rules>
+
+PROTOCOL BASIS AND LIMITS
+
+Briar's documented BSP header is version:u8/type:u8/payloadLength:u16:
+https://code.briarproject.org/briar/briar/-/wikis/BSP/diff?version_id=9e4624336187ed75aa51f6b55e60d7b4f214d9eb6d&w=1
+This codec adapts that documented framing convention. It is independently
+written, not copied Briar code, and is not wire-compatible with Briar.
+The mesh body fields, enum codes, and CRC trailer are application-specific.
+This is only a bounded serialization adapter, not an implementation of BSP
+or a custom transport engine. Direct Briar interoperability requires actual
+Bramble integration, including its synchronization and security protocols.
+
+AndroidX dependency and API references:
+https://developer.android.com/jetpack/androidx/releases/security
+https://developer.android.com/reference/androidx/security/crypto/EncryptedSharedPreferences
+
+VALIDATION
+
+Standalone codec checks (requires Kotlin compiler and JDK):
+kotlinc MeshPacket.kt MeshPacketChecks.kt -include-runtime -d mesh-checks.jar
+java -jar mesh-checks.jar
+
+Checks cover all packet types, directed/broadcast frames, fragmented and
+concatenated streams, CRC corruption, malformed UTF-8, unknown types,
+truncation/trailing bytes, maximum sizes, immutable payloads and TTL bounds.
+During Step 2, a local JDK was found and Kotlin tooling was downloaded.
+These standalone codec checks now compile and pass. IdentityGenerator Android
+compilation and on-device Keystore persistence/restart tests remain necessary
+in the host app. See STEP2_INTEGRATION.txt for the connection-layer validation.

@@ -1,0 +1,186 @@
+STEP 4: LARGE FILES, PRE-ALERT AND REVERSE DELIVERY ACK
+
+FILES / BUILD
+New: ChunkManager.kt, AckManager.kt, PriorityQueueManager.kt.
+Updated integration: WifiDirectManager.kt, RelayPacketFilter.kt, SilentRelayService.kt.
+Keep MeshPacket.kt (wire v2), ClusterController.kt, MeshRoutingTable.kt and the
+existing Step 3 manifest. Copy all production .kt files from the bundle into the
+same com.example.mesh package. Tests are separate JVM programs, not app source.
+Build: Kotlin 2.1.20+, minSdk 26, compileSdk >=34, targetSdk >=34; dependency:
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+IdentityGenerator and its security-crypto dependency remain optional app bootstrap
+components from Step 1; this transfer code accepts the already-persisted identity.
+
+The outer MeshPacket layout/version is unchanged. Upgrade the managers on endpoints
+and relays to install the transfer breadcrumb and priority hooks. Existing u16
+framing cannot contain a 512 KiB payload; enlarging that frame would break the
+previous codec and relay pool. This implementation reads 512 KiB logical chunks
+from disk and splits them into up to sixteen 32 KiB wire fragments.
+
+USAGE WITH THE FOREGROUND SERVICE
+Start, bind, request permissions and configure the service as described in Step 3.
+The configure(localMyId, clusterId, ownerId, localConsumer) callback continues to
+receive non-file local data. After configure(), on BOTH file endpoints:
+
+val files = relay.enableFileTransfers()
+
+Call that before opening the connection/accepting file transfers. It creates the
+endpoint transfer controller using File(cacheDir, "mesh-transfers"); the directory
+is created only when accepting a local PRE_ALERT. Relays that only forward traffic
+do not call enableFileTransfers(). Regardless of this opt-in, data addressed to
+another device never reaches the cache writer.
+
+Connect using relay.startOwner()/connectDirect()/joinHotspot()/connectAdjacent().
+The routing table must have a valid next hop for distant destinations. A unique
+direct peer also resolves automatically. This step adds reverse ACK paths, not
+forward route discovery.
+
+Sender (inside a coroutine; sourceFile must be an accessible, stable File):
+val transferId = files.sendFile(sourceFile, recipientIdentity, destinationRouteClusterId)
+// This returns only after a matching VERIFIED ACK, not when bytes enter a socket.
+
+UI delivery state:
+relay.acknowledgements.states.collect { states ->
+    // PREPARING: hashing/pre-alert workflow is pending after metadata registration.
+    // ACCEPTED: destination opened the cache file and sent READY.
+    // SENT: all fragments were written locally (single tick).
+    // DELIVERED: destination SHA-256 verification ACK received (double tick).
+    // FAILED: rejection, cancellation, I/O error or timeout; do not show double tick.
+}
+
+Receiver:
+files.completed.collect { transfers ->
+    // Each Completed exposes metadata and the verified app-cache File.
+    // Use metadata.fileName as a display label, never as a filesystem path.
+}
+// After the user/consumer finishes with a cached file:
+files.release(transferId)
+
+The service owns the created ChunkManager and closes it on destruction. Partial
+files are removed on close; verified cache files are retained by default for the
+consumer. Android may evict cache files. There is no durable inbox/database here.
+When constructing ChunkManager outside the service, call close() yourself and
+provide AckManager plus a suspending sendPacket callback that awaits actual writes.
+Do NOT adapt that callback to the old non-suspending send() API: queue admission
+alone is insufficient backpressure for large files.
+
+For a selected content:// URI, the current public sendFile overload takes a File,
+not a Uri. Use an app-accessible source file or extend the source adapter with an
+owned ParcelFileDescriptor/FileChannel; do not read a 1GB file into a ByteArray.
+
+TRANSFER SEQUENCE
+1. Sender opens FileInputStream.channel and hashes the source using a 512 KiB buffer.
+2. Sender registers a bounded ACK ticket, then sends PRE_ALERT with exactly 1,024
+   metadata payload bytes. The complete outer frame is larger by its normal header.
+3. Each relay records a transfer-level breadcrumb pointing to the ingress session.
+   The destination validates limits, creates a random-named app-cache file, opens
+   RandomAccessFile and sets its expected length. It replies DELIVERY_ACK/READY.
+4. Sender waits for READY before reading/sending data. FileChannel reads repeatedly
+   until each 512 KiB block is filled (or the final short block). Each block produces
+   up to sixteen 32 KiB fragments in the slow lane. Sending awaits each socket write.
+5. Destination validates fragment geometry, seeks to its calculated Long offset,
+   writes through the RandomAccessFile channel, and marks a BitSet entry. Out-of-order
+   fragments are accepted; duplicates cannot inflate completion counts.
+6. After every expected fragment is present, a separate IO job forces the file and
+   verifies SHA-256. The socket reader is free to handle heartbeats during hashing.
+7. Only a correct complete file becomes Completed and causes DELIVERY_ACK/VERIFIED.
+   ACKs follow the observed ingress sessions in reverse across bridges. Sender
+   matches transfer ID, recipient, route cluster, file size and SHA-256 before
+   showing DELIVERED. This is a delivery/integrity tick, not a read receipt.
+
+FILE PAYLOAD FORMATS (big-endian, inside the existing MeshPacket payload)
+PRE_ALERT (1,024 bytes, zero padded):
+  magic PRA1:i32 | transferId:UUID16 | fileSize:i64 |
+  logicalChunkSize:i32=524288 | fragmentSize:i32=32768 |
+  sha256:32 | filenameUtf8Length:u16 | filename:UTF-8 (1..255 bytes) | zero padding
+
+MEDIA_CHUNK (36-byte fragment header + 1..32,768 data bytes):
+  magic CHK1:i32 | transferId:UUID16 | logicalChunkIndex:i64 |
+  fragmentIndexWithinChunk:i32 (0..15) | dataLength:i32 | data
+  absoluteOffset = chunkIndex * 524288L + fragmentIndex * 32768L
+  The last fragment must have exactly min(32768, fileSize - absoluteOffset) bytes.
+  Indices, lengths, arithmetic overflow and file bounds are validated before writes.
+
+DELIVERY_ACK (61 bytes):
+  magic ACK1:i32 | transferId:UUID16 | code:u8 | fileSize:i64 | sha256:32
+  code 1=READY, 2=VERIFIED, 3=REJECTED
+  targetId is the original sender, senderId is the file destination. Relays preserve
+  them and consume the ordinary v2 TTL once per outgoing hop. No new PacketType
+  enum is needed; PRE_ALERT is the existing PRE_ALERT_METADATA carrier.
+
+PRIORITY AND MEMORY
+Every admitted TCP session has one PriorityQueueManager. PTT_VOICE, DELIVERY_ACK,
+HEARTBEAT, PRE_ALERT and TEXT use the fast channel (capacity 16). MEDIA_CHUNK uses
+the slow channel (capacity 4). Fast work is chosen before pending slow work at each
+frame boundary. A continuous fast stream can starve file traffic by design.
+
+The scheduler serializes heartbeat, local send and raw relay writes. It cannot
+interrupt a frame already in progress or bytes already queued in TCP; it does not
+eliminate TCP head-of-line blocking. Fragmentation bounds an ordinary file frame
+to roughly 32 KiB plus headers. The existing 10-second socket-write deadline remains.
+
+execute()/sendAwait() return only after actual writes. Cancelled pending work is
+discarded; cancelled active work must finish before a borrowed buffer may be wiped.
+Thus the Step 3 direct-buffer ownership and <=2 MiB relay payload budget remain
+intact even though frames are now scheduled. No relay makes a disk spool.
+
+Endpoints additionally use one 512 KiB sender buffer (one sendFile at a time per
+manager), small fragment packets, a fragment BitSet per incoming file, and a
+512 KiB buffer per verification job. No entire-file ByteArray or 512 KiB outer
+MeshPacket is allocated. The relay-only budget does not include endpoint buffers,
+OS TCP buffers, cache files, metadata or app-owned local content.
+
+LIMITS AND FAILURE BEHAVIOR
+- Default max file size: 8 GiB; aggregate reserved cache budget: 8 GiB; at most two
+  receiving/retained-complete entries. release() frees a slot and deletes that file.
+- Cache space is checked at acceptance, but setLength may create a sparse file;
+  it cannot reserve physical disk space. Later full-disk errors reject the transfer.
+- Remote filenames are display metadata only. The receiver uses createTempFile()
+  inside the app cache directory, so ../ names cannot control the output path.
+- Default sender timeouts: READY 60 seconds; final VERIFIED ACK 120 seconds after
+  data is sent. sendFile exposes both values for device/file-size tuning.
+- Incomplete receiver entries expire after 10 minutes idle, checked every 15 seconds.
+- Reverse breadcrumbs are capped at 256 transfers and expire after two idle hours;
+  fragments refresh them. They are independent of the 1,000-packet duplicate LRU.
+- Sender retains at most 256 delivery-state entries. This is in-memory UI state,
+  not durable delivery history. Process death does not resume file transfers.
+- No fragment retry/NACK or disconnect-resume protocol is implemented in this step.
+  On disconnection, missing fragments, lost ACK or path expiry, the sender must not
+  assume delivery. Retrying sendFile creates a new transfer ID; partial cache files
+  eventually expire or are cleaned by close(). Reconnect does not repair old breadcrumbs.
+- A verified destination file is retained if its ACK cannot be delivered. The sender
+  then times out rather than displaying an unconfirmed double tick.
+- The source should remain stable. A second streamed digest and final size check
+  detect changes during sending; receiver hash validation also rejects mismatches.
+- SHA-256 validates bytes against the pre-alert. Raw TCP/CRC and nickname identities
+  still lack peer authentication; these ACK fields do not provide cryptographic
+  proof of who sent them. Retain the prior requirement for authenticated transport.
+
+UPSTREAM BASIS
+See THIRD_PARTY_NOTICES.txt. The inspected TrebleShot uprotocol source streams data,
+checks source size and tracks offsets. The particular 512 KiB geometry, fragment
+payloads, SHA completion gate, reverse ACK breadcrumbs and priority scheduler here
+are application-specific adaptations. No interoperability with TrebleShot is claimed.
+
+VALIDATION
+Compiled all production sources against Android API 34 with Kotlin 2.1.20 and
+coroutines 1.10.2. Step 1, 2, 3 and 4 JVM checks pass together.
+Step4Checks covers priority ordering and active-write cancellation, >2 GiB offset
+math/overflow, out-of-order/duplicate fragments, safe cache naming, 1 KiB metadata,
+empty files, deliberate SHA mismatch/rejection, and reverse READY/VERIFIED ACKs.
+
+The --large run transferred 1,073,754,169 bytes (1 GiB + 12,345 bytes) through an
+in-process memory-only relay with a 256 MiB JVM heap, wrote the destination cache,
+verified SHA-256 and returned the reverse ACK after duplicate-LRU rollover.
+This validates the protocol/assembly path, not real Android radio throughput.
+Step 2/3 separately include loopback TCP framing tests. Android cache/service and
+cross-OEM Wi-Fi behavior still require device tests.
+
+Run JVM checks with the compiled classes and coroutines on the classpath:
+java -Xmx256m -cp <compiled-jar;stdlib;coroutines> com.example.mesh.Step4ChecksKt
+java -Xmx256m -cp <compiled-jar;stdlib;coroutines> com.example.mesh.Step4ChecksKt --large
+
+REFERENCES
+https://repo.maven.apache.org/maven2/org/monora/uprotocol/core/0.1.0-ALPHA35/core-0.1.0-ALPHA35-sources.jar
+https://developer.android.com/reference/java/nio/channels/FileChannel
+https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.selects/select.html
