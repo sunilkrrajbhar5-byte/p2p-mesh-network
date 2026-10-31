@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -25,7 +27,7 @@ import java.io.File
 @Composable
 fun IncomingConnectionDialog(controller: PeerConsentController) {
     val pending by controller.pending.collectAsStateWithLifecycle()
-    val request = pending.firstOrNull() ?: return
+    val request = pending.firstOrNull { it.kind != PeerConsentController.Kind.CONNECTION } ?: return
     key(request.id) {
         AlertDialog(
             onDismissRequest = { controller.decide(request.id, false) },
@@ -39,8 +41,8 @@ fun IncomingConnectionDialog(controller: PeerConsentController) {
                     PeerConsentController.Kind.CONNECTION -> Text("Allow a direct connection on this local network?")
                 }
             } },
-            dismissButton = { TextButton(onClick = { controller.decide(request.id, false) }) { Text("Reject") } },
-            confirmButton = { Button(onClick = { controller.decide(request.id, true) }) { Text("Accept") } }
+            dismissButton = { TextButton(onClick = { controller.decide(request.id, false) }) { Text("Reject / अस्वीकार करें") } },
+            confirmButton = { Button(onClick = { controller.decide(request.id, true) }) { Text("Accept / स्वीकारें") } }
         )
     }
 }
@@ -60,11 +62,16 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
     var selected by remember { mutableStateOf<String?>(null) }
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    var networkGranted by remember { mutableStateOf(WifiDirectManager.requiredPermissions().all { context.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }) }
+    val pending by engine.consent.pending.collectAsStateWithLifecycle()
+    var showComposer by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
     var resumed by remember { mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     DisposableEffect(engine, owner) {
         fun update() {
             resumed = owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
             engine.consent.setUiVisible(resumed)
+            networkGranted = WifiDirectManager.requiredPermissions().all { context.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
         }
         val observer = LifecycleEventObserver { _, _ -> update() }
         owner.lifecycle.addObserver(observer); update(); engine.start()
@@ -74,6 +81,9 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
     LaunchedEffect(connections, resumed) {
         if (selected !in connections.map { it.peerId }) selected = connections.firstOrNull()?.peerId
         if (resumed && connections.isNotEmpty()) engine.createVoice(owner)
+    }
+    LaunchedEffect(pending.firstOrNull { it.kind == PeerConsentController.Kind.CONNECTION }?.id) {
+        if (pending.any { it.kind == PeerConsentController.Kind.CONNECTION }) listState.animateScrollToItem(4)
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val peer = selected
@@ -110,31 +120,53 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
             finally { withContext(NonCancellable + Dispatchers.IO) { temporary?.delete() }; sending = false }
         }
     }
-    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Nearby Devices", style = MaterialTheme.typography.headlineMedium)
-        Text(identity)
-        remoteControls()
-        ActiveGatewayCard(identity)
-        Text(status, style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = engine::refresh) { Text("Search nearby") }
-            if (connections.isNotEmpty()) TextButton(onClick = engine::disconnect) { Text("Disconnect") }
-        }
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (nearby.isEmpty() && connections.isEmpty()) item { Text("No nearby devices yet. Keep Wi-Fi and Location enabled on both devices.") }
-            items(connections, key = { it.sessionId }) { connection ->
-                Card(onClick = { selected = connection.peerId }, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) { Text(connection.peerId); Text(if (selected == connection.peerId) "Selected · Connected" else "Connected") }
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding(),
+        contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item("brand") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { MeshBrandHeader() } }
+        item("identity") { MeshIdentityCard(identity) }
+        item("gateway") { ActiveGatewayCard(identity) }
+        item("radar") {
+            MeshGlass {
+                Text("Nearby Devices / आस-पास के लोग", style = MaterialTheme.typography.titleLarge)
+                MeshRadarAnimation(active = resumed && networkGranted && connections.isEmpty())
+                Text("● Active: $identity (You)", color = MeshGreen)
+                Text(status, style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = engine::refresh, enabled = networkGranted) { Text("Search / खोजें") }
+                    if (connections.isNotEmpty()) TextButton(onClick = engine::disconnect) { Text("Disconnect") }
                 }
+                if (nearby.isEmpty() && connections.isEmpty()) Text("No devices yet / अभी कोई डिवाइस नहीं मिला। Wi-Fi और Location चालू रखें।")
             }
-            items(nearby.filter { peer -> connections.none { it.peerId == peer.identity } }, key = { it.address }) { peer ->
-                Card(onClick = { engine.connect(peer) }, enabled = connections.isEmpty(), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) { Text(peer.identity); Text("Tap to request connection") }
-                }
-            }
-            items(chat) { Text(it) }
         }
-        selected?.let { peer ->
+        items(pending.filter { it.kind == PeerConsentController.Kind.CONNECTION }, key = { "request:${it.id}" }) { request ->
+            MeshGlass {
+                Text("Join Request / जुड़ने का अनुरोध", color = MeshCyan, style = MaterialTheme.typography.labelLarge)
+                Text(request.peerId, style = MaterialTheme.typography.titleLarge)
+                Text("${request.peerId} wants to connect with you.")
+                RequestActionButtons(onAccept = { engine.consent.decide(request.id, true) },
+                    onReject = { engine.consent.decide(request.id, false) })
+            }
+        }
+        items(connections, key = { "connected:${it.sessionId}" }) { connection ->
+            Card(onClick = { selected = connection.peerId; showComposer = true }, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp)) { Text(connection.peerId, style = MaterialTheme.typography.titleMedium); Text(if(selected == connection.peerId) "✓ Selected · Connected / जुड़े हैं" else "Connected / जुड़े हैं", color = MeshGreen) }
+            }
+        }
+        items(nearby.filter { peer -> connections.none { it.peerId == peer.identity } }, key = { "nearby:${it.address}" }) { peer ->
+            Card(onClick = { engine.connect(peer) }, enabled = networkGranted && connections.isEmpty(), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp)) { Text(peer.identity, style = MaterialTheme.typography.titleMedium); Text("Tap to connect / जुड़ने के लिए टैप करें", color = MeshCyan) }
+            }
+        }
+        item("permissions") { MeshPermissionMatrix(onNetworkState = { networkGranted = it }) }
+        item("continue") { MeshContinueButton(enabled = networkGranted, onClick = {
+            if (selected != null) { showComposer = true; scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 3).coerceAtLeast(0)) } }
+            else { engine.refresh(); engine.notify("Select a nearby device / पास का डिवाइस चुनें") }
+        }) }
+        item("controls") { remoteControls() }
+        items(chat) { Text(it) }
+        item("composer") {
+        if (showComposer) selected?.let { peer ->
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(text, { text = it.take(8000) }, label = { Text("Message to $peer") }, modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { engine.sendText(peer, text); text = "" }, enabled = text.isNotBlank()) { Text("Send") }
@@ -149,10 +181,23 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
                 })
             }) { Text("Hold to request voice / talk", Modifier.padding(20.dp)) }
         }
-        transfer?.let { value ->
+            }
+        }
+        item("transfer") { transfer?.let { value ->
             LinearProgressIndicator(progress = { value.fraction }, modifier = Modifier.fillMaxWidth())
             Text("${value.name}: ${displayBytes(value.sentBytes)} · ${value.phase}")
         }
+        }
+        item("version") { MeshVersionTag() }
     }
     IncomingConnectionDialog(engine.consent)
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RequestActionButtons(onAccept: () -> Unit, onReject: () -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Button(onClick = onAccept, colors = ButtonDefaults.buttonColors(containerColor = MeshGreen, contentColor = Color(0xFF06261C))) { Text("Accept / स्वीकारें") }
+        Button(onClick = onReject, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF512630), contentColor = Color(0xFFFFBAC5))) { Text("Reject / अस्वीकार करें") }
+    }
 }

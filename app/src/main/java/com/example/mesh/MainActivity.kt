@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
             val controls by app.controls.collectAsStateWithLifecycle()
             val error by app.error.collectAsStateWithLifecycle()
             var savedProfile by remember { mutableStateOf<String?>(null) }
-            MaterialTheme {
+            SrMeshTheme {
                 Surface(Modifier.fillMaxSize()) {
                     val remote = controls
                     if (remote == null) Column(Modifier.safeDrawingPadding().padding(24.dp)) {
