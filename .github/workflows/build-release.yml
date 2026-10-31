@@ -35,7 +35,7 @@ jobs:
       - name: Verify Gradle wrapper
         run: echo '2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046  gradle/wrapper/gradle-wrapper.jar' | sha256sum --check
       - name: Install Android SDK components
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
       - name: Restore stable signing key
         env:
           KEYSTORE_B64: ${{ secrets.MESH_KEYSTORE_BASE64 }}
