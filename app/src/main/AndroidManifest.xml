@@ -20,7 +20,7 @@
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="32" />
   <uses-feature android:name="android.hardware.wifi.direct" android:required="false" />
   <uses-feature android:name="android.hardware.wifi" android:required="true" />
-  <application android:fullBackupContent="@xml/mesh_backup_rules" android:dataExtractionRules="@xml/mesh_data_extraction_rules" android:name=".MeshApplication" android:label="P2P Mesh · GitHub integration" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false">
+  <application android:fullBackupContent="@xml/mesh_backup_rules" android:dataExtractionRules="@xml/mesh_data_extraction_rules" android:name=".MeshApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false">
     <service android:name="com.example.mesh.SilentRelayService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="connectedDevice" />
     <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true">
       <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/mesh_update_paths" />

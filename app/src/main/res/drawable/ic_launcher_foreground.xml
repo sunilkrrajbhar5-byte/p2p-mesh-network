@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 108dp adaptive layer. All essential artwork lies inside the central 66dp safe circle.
+     Layered translucent strokes create a vector-only glow; no raster or font dependency. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Soft circuit halo and hexagonal mesh frame. -->
+    <path android:pathData="M54,25 L78,39 L78,67 L54,81 L30,67 L30,39 Z"
+        android:fillColor="#00000000" android:strokeColor="#00F2FE" android:strokeAlpha="0.08" android:strokeWidth="5" android:strokeLineJoin="round" />
+    <path android:pathData="M54,25 L78,39 L78,67 L54,81 L30,67 L30,39 Z"
+        android:fillColor="#2200B8D4" android:strokeColor="#38BDF8" android:strokeAlpha="0.7" android:strokeWidth="1.2" android:strokeLineJoin="round" />
+    <!-- Wi-Fi arcs bridge the mesh nodes. -->
+    <path android:pathData="M40,40 Q54,27 68,40 M46,44 Q54,36 62,44"
+        android:fillColor="#00000000" android:strokeColor="#00F2FE" android:strokeAlpha="0.12" android:strokeWidth="5.5" android:strokeLineCap="round" />
+    <path android:pathData="M40,40 Q54,27 68,40 M46,44 Q54,36 62,44"
+        android:fillColor="#00000000" android:strokeColor="#00F2FE" android:strokeWidth="1.8" android:strokeLineCap="round" />
+    <!-- Connected SR monogram: shared center spine, custom geometry. -->
+    <path android:pathData="M51,50 L42,50 Q37,50 37,55 Q37,59 42,59 L47,59 Q52,59 52,64 Q52,69 47,69 L37,69 M55,69 L55,50 L65,50 Q72,50 72,56 Q72,61 65,61 L55,61 M64,61 L72,69"
+        android:fillColor="#00000000" android:strokeColor="#00F2FE" android:strokeAlpha="0.14" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M51,50 L42,50 Q37,50 37,55 Q37,59 42,59 L47,59 Q52,59 52,64 Q52,69 47,69 L37,69"
+        android:fillColor="#00000000" android:strokeColor="#00F2FE" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M55,69 L55,50 L65,50 Q72,50 72,56 Q72,61 65,61 L55,61 M64,61 L72,69"
+        android:fillColor="#00000000" android:strokeColor="#38BDF8" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <!-- Bright nodes connect the perimeter to the central radio. -->
+    <path android:pathData="M30,39 L37,43 M78,39 L71,43 M54,75 L54,81"
+        android:fillColor="#00000000" android:strokeColor="#38BDF8" android:strokeWidth="1.4" />
+    <path android:pathData="M51.5,25 A2.5,2.5 0,1 0,56.5 25 A2.5,2.5 0,1 0,51.5 25 M27.5,39 A2.5,2.5 0,1 0,32.5 39 A2.5,2.5 0,1 0,27.5 39 M75.5,39 A2.5,2.5 0,1 0,80.5 39 A2.5,2.5 0,1 0,75.5 39 M51.5,81 A2.5,2.5 0,1 0,56.5 81 A2.5,2.5 0,1 0,51.5 81"
+        android:fillColor="#00F2FE" />
+</vector>
