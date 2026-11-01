@@ -33,18 +33,16 @@ android {
         versionName = published["latestVersionName"] as String
     }
     signingConfigs {
-        getByName("debug") {
-            System.getenv("MESH_KEYSTORE_PATH")?.let { path ->
-                storeFile = file(path)
-                storePassword = System.getenv("MESH_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("MESH_KEY_ALIAS")
-                keyPassword = System.getenv("MESH_KEY_PASSWORD")
-            }
+        create("release") {
+            // Signing is deliberately separate from the developer debug identity.
+            System.getenv("KEYSTORE_PATH")?.let { storeFile = file(it) }
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
         }
     }
     buildTypes.getByName("release") {
-        // Reuse the stable installed-app signer for upgrade compatibility.
-        signingConfig = signingConfigs.getByName("debug")
+        signingConfig = signingConfigs.getByName("release")
         isDebuggable = false
     }
     buildFeatures { compose = true; buildConfig = true }
@@ -78,4 +76,17 @@ dependencies {
     implementation("androidx.media3:media3-effect:1.5.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.google.zxing:core:3.5.3") // Offline QR generation; no scanner service/CDN.
+}
+
+// Fail before packaging rather than silently shipping an unsigned release.
+tasks.register("validateReleaseSigning") {
+    doLast {
+        listOf("KEYSTORE_PATH", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD").forEach {
+            check(!System.getenv(it).isNullOrBlank()) { "Missing release signing environment variable: $it" }
+        }
+        check(file(System.getenv("KEYSTORE_PATH")).isFile) { "Release keystore file does not exist" }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn("validateReleaseSigning")
 }

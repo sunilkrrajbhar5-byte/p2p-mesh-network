@@ -8,6 +8,10 @@ on:
         description: 'Existing tag to build (must match config.json version name)'
         required: true
         type: string
+      verify_only:
+        description: Build the selected workflow ref without modifying a published release
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -20,13 +24,14 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.verify_only && github.ref || inputs.tag || github.ref }}
           persist-credentials: false
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '17'
       - name: Validate config and immutable release tag
+        if: ${{ !inputs.verify_only }}
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ github.token }}
@@ -38,24 +43,29 @@ jobs:
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
       - name: Restore stable signing key
         env:
-          KEYSTORE_B64: ${{ secrets.MESH_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.MESH_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.MESH_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.MESH_KEY_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || secrets.MESH_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || secrets.MESH_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || secrets.MESH_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || secrets.MESH_KEY_PASSWORD }}
         run: |
-          test -n "$KEYSTORE_B64" && test -n "$KEYSTORE_PASSWORD" && test -n "$KEY_ALIAS" && test -n "$KEY_PASSWORD" || {
-            echo 'Configure all four MESH signing secrets before releasing. Fresh CI debug keys would break updates.'; exit 1;
+          test -n "$KEYSTORE_BASE64" && test -n "$KEYSTORE_PASSWORD" && test -n "$KEY_ALIAS" && test -n "$KEY_PASSWORD" || {
+            echo 'Configure all four release signing secrets before releasing. Fresh CI debug keys would break updates.'; exit 1;
           }
           umask 077
-          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/mesh-signing.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/srmesh-release.jks"
       - name: Build APK
         env:
-          MESH_KEYSTORE_PATH: ${{ runner.temp }}/mesh-signing.jks
-          MESH_KEYSTORE_PASSWORD: ${{ secrets.MESH_KEYSTORE_PASSWORD }}
-          MESH_KEY_ALIAS: ${{ secrets.MESH_KEY_ALIAS }}
-          MESH_KEY_PASSWORD: ${{ secrets.MESH_KEY_PASSWORD }}
+          KEYSTORE_PATH: ${{ runner.temp }}/srmesh-release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || secrets.MESH_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || secrets.MESH_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || secrets.MESH_KEY_PASSWORD }}
         run: bash ./gradlew --no-daemon :app:assembleRelease
+      - name: Verify signed release APK
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/SR-Mesh.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$RUNNER_TEMP/SR-Mesh.apk"
       - name: Publish a new release without replacing counted assets
+        if: ${{ !inputs.verify_only }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -83,4 +93,4 @@ jobs:
           gh release edit "$RELEASE_TAG" --draft=false --latest
       - name: Remove signing material
         if: always()
-        run: rm -f -- "$RUNNER_TEMP/mesh-signing.jks"
+        run: rm -f -- "$RUNNER_TEMP/srmesh-release.jks"
