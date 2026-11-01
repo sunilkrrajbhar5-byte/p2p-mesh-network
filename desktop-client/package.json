@@ -9,7 +9,9 @@
     "start": "electron .",
     "test": "node --test test/*.test.js",
     "dist": "npm run build",
-    "build": "electron-builder --win nsis portable --x64 --publish never"
+    "build": "electron-builder --config signing.config.cjs --win nsis portable --x64 --publish never",
+    "build:dev": "powershell.exe -NoProfile -File scripts/build-dev-signed.ps1",
+    "cert:dev": "powershell.exe -NoProfile -File scripts/new-dev-certificate.ps1 -TrustCurrentUser"
   },
   "devDependencies": {
     "electron": "45.2.1",
@@ -59,7 +61,8 @@
       ],
       "icon": "assets/icon.ico",
       "signAndEditExecutable": true,
-      "signExecutable": false
+      "signExecutable": true,
+      "requestedExecutionLevel": "asInvoker"
     },
     "portable": {
       "artifactName": "SR-Mesh-Windows-Portable-v${version}.${ext}"
@@ -75,6 +78,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "SR MESH Desktop"
-    }
+    },
+    "forceCodeSigning": true
   }
 }

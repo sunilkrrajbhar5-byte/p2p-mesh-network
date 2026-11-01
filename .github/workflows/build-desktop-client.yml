@@ -19,7 +19,28 @@ jobs:
       - run: npm ci --prefix desktop-client
       - run: npm test --prefix desktop-client
       - run: node --test scripts/gateway-workspace.test.mjs
-      - run: npm run dist --prefix desktop-client
+      - name: Build signed Windows packages
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          AZURE_SIGN_ENDPOINT: ${{ vars.AZURE_SIGN_ENDPOINT }}
+          AZURE_SIGN_ACCOUNT: ${{ vars.AZURE_SIGN_ACCOUNT }}
+          AZURE_SIGN_PROFILE: ${{ vars.AZURE_SIGN_PROFILE }}
+          AZURE_SIGN_PUBLISHER: ${{ vars.AZURE_SIGN_PUBLISHER }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: npm run dist --prefix desktop-client
+      - name: Require valid non-self-signed release signatures
+        shell: pwsh
+        run: |
+          $files = @('docs/downloads/win-unpacked/SR MESH Desktop.exe','docs/downloads/SR-Mesh-Windows-Portable-v1.0.3.exe','docs/downloads/SR-Mesh-Windows-Setup-v1.0.3.exe')
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $file
+            if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate -or $signature.SignerCertificate.Subject -eq $signature.SignerCertificate.Issuer) {
+              throw "Release requires valid provider-issued Authenticode signatures: $file"
+            }
+          }
       - name: Verify embedded application, portable and installer icons
         run: node desktop-client/scripts/verify-icons.cjs "docs/downloads/win-unpacked/SR MESH Desktop.exe" docs/downloads/SR-Mesh-Windows-Portable-v1.0.3.exe docs/downloads/SR-Mesh-Windows-Setup-v1.0.3.exe
       - name: Verify native preload and packaged dashboard
@@ -46,5 +67,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         shell: pwsh
         run: |
-          gh release create $env:GITHUB_REF_NAME docs/downloads/SR-Mesh-Windows-Portable-v1.0.3.exe docs/downloads/SR-Mesh-Windows-Setup-v1.0.3.exe docs/downloads/SR-Mesh-Native-v1.0.3.sha256 --verify-tag --latest=false --title 'SR Mesh Native Workspace v1.0.3' --notes 'Portable Windows x64 executable with bundled gateway dashboard and native LAN HTTP/WebSocket transport. Gateway access key required. HTTP is unencrypted; HTTPS certificate verification remains enabled. Unsigned binary; SHA-256 checksum included.'
+          gh release create $env:GITHUB_REF_NAME docs/downloads/SR-Mesh-Windows-Portable-v1.0.3.exe docs/downloads/SR-Mesh-Windows-Setup-v1.0.3.exe docs/downloads/SR-Mesh-Native-v1.0.3.sha256 --verify-tag --latest=false --title 'SR Mesh Native Workspace v1.0.3' --notes 'Portable Windows x64 executable with bundled gateway dashboard and native LAN HTTP/WebSocket transport. Gateway access key required. HTTP is unencrypted; HTTPS certificate verification remains enabled. Authenticode signatures verified; SHA-256 checksum included. Smart App Control acceptance depends on Microsoft trust and policy.'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

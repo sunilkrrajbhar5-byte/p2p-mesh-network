@@ -12,7 +12,7 @@ never receives Node or filesystem access. Gateway session cookies remain in the
 main process. TLS verification is enabled. HTTP works locally but is unencrypted.
 Downloads stream to a temporary file beside the location chosen in the native
 Save dialog, then rename on successful completion. Cancelling uploads aborts the
-native HTTP request. Portable binaries are unsigned (no Windows certificate supplied).
+native HTTP request. Previously published v1.0.3 binaries are unsigned. New release builds require signing credentials; see WINDOWS-SIGNING.md.
 
 The workflow builds on Windows, verifies the packaged dashboard/preload, publishes
 an immutable Release asset, and Pages copies it into downloads/. This avoids the
@@ -32,7 +32,7 @@ The visible product and shortcut name is SR MESH Desktop. Its existing profile
 folder is preserved so the branding update does not reset the user's identity.
 
 `signAndEditExecutable: true` enables embedding the icon and version metadata.
-`signExecutable: false` skips signing only; no signing certificate is configured.
+`signExecutable: true` and `forceCodeSigning: true` require signing. Supply credentials through the environment (see WINDOWS-SIGNING.md).
 NSIS installer, uninstaller and wizard header use the same ICO. NSIS creates
 Desktop and Start Menu shortcuts. Prefer installing NSIS for stable taskbar pins;
 a portable executable extracts its application to a temporary location.
