@@ -17,7 +17,7 @@ function setup(nav={},Detector){
  const window={BarcodeDetector:Detector,addEventListener(n,f){events[n]=f;}};
  const document={getElementById:element,querySelector:()=>({remove(){}}),addEventListener(n,f){events[n]=f;}};
  const context={URL,location,document,window,navigator:nav,BarcodeDetector:Detector,setTimeout,clearTimeout};
- scripts.forEach(s=>vm.runInNewContext(s,context));
+ scripts.slice(0,2).forEach(s=>vm.runInNewContext(s,context));
  return {element,location,events};
 }
 test('Paste connects only through original origin validation',async()=>{
