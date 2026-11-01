@@ -1,8 +1,8 @@
 {
-  "latestVersionCode": 2,
-  "latestVersionName": "1.0.1",
+  "latestVersionCode": 3,
+  "latestVersionName": "1.0.2",
   "apkDownloadUrl": "https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/releases/latest/download/SR-Mesh.apk",
   "webClientUrl": "https://sunilkrrajbhar5-byte.github.io/p2p-mesh-network/",
   "forceUpdate": false,
-  "releaseNotes": "SR Mesh dark-neon bilingual UI, PIN-free peer consent, launcher branding, and gateway Copy/Share/QR helpers."
+  "releaseNotes": "Enhanced cyber-mesh onboarding: glass cards, profile avatar, layered animated radar, colorful permission controls, and gradient actions. Existing discovery and connection behavior preserved."
 }
