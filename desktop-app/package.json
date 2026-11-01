@@ -1,0 +1,65 @@
+{
+  "name": "sr-mesh-desktop",
+  "version": "1.0.2",
+  "description": "Offline SR Mesh gateway desktop client",
+  "author": "SR Systems",
+  "license": "GPL-2.0-or-later",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "build:win": "electron-builder --win nsis portable --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.srsystems.srmesh.desktop",
+    "productName": "SR Mesh Desktop",
+    "asar": true,
+    "directories": {
+      "output": "../docs/downloads"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "network.js",
+      "launcher.html",
+      "renderer.js",
+      "launcher.css",
+      "icon.png",
+      "README.txt",
+      "LICENSE.txt"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.png",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "artifactName": "SR-Mesh-Windows-Setup-v${version}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "portable": {
+      "artifactName": "SR-Mesh-Windows-Portable-v${version}.${ext}"
+    },
+    "compression": "maximum"
+  }
+}

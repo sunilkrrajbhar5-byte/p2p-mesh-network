@@ -1,0 +1,36 @@
+name: Deploy portal with Windows downloads
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', '.github/workflows/deploy-pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add immutable desktop binaries to the static site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: sunilkrrajbhar5-byte/p2p-mesh-network
+        run: |
+          mkdir -p docs/downloads
+          gh release download windows-v1.0.2 --pattern '*.exe' --pattern '*.sha256' --dir docs/downloads
+          (cd docs/downloads && sha256sum --check SR-Mesh-Windows-v1.0.2.sha256)
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Publish Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

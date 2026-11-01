@@ -1,0 +1,46 @@
+name: Build Windows desktop client
+on:
+  push:
+    tags: ['windows-v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
+      - run: npm ci --prefix desktop-app
+      - run: npm test --prefix desktop-app
+      - run: npm run build:win --prefix desktop-app
+      - name: Smoke check packaged executable and checksum downloads
+        shell: pwsh
+        run: |
+          $client = Start-Process -FilePath 'docs/downloads/win-unpacked/SR Mesh Desktop.exe' -WindowStyle Hidden -PassThru
+          Start-Sleep -Seconds 8
+          if ($client.HasExited) { throw "Packaged client exited unexpectedly: $($client.ExitCode)" }
+          Stop-Process -Id $client.Id
+          $lines = Get-ChildItem docs/downloads/*.exe | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
+          $lines | Set-Content docs/downloads/SR-Mesh-Windows-v1.0.2.sha256 -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SR-Mesh-Windows-x64
+          path: |
+            docs/downloads/*.exe
+            docs/downloads/*.sha256
+          if-no-files-found: error
+      - name: Publish Windows release without changing latest Android release
+        if: startsWith(github.ref, 'refs/tags/windows-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          gh release create $env:GITHUB_REF_NAME docs/downloads/*.exe docs/downloads/*.sha256 --verify-tag --latest=false --title 'SR Mesh Windows v1.0.2' --notes 'Windows x64 installer and portable client. Connect to an Android local mesh gateway for offline communication. Unsigned binaries; no Windows signing certificate is configured. SHA-256 checksums included.'
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

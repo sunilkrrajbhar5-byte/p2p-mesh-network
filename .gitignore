@@ -12,3 +12,10 @@ local.properties
 *.p12
 *.b64
 
+
+desktop-app/node_modules/
+docs/downloads/win-unpacked/
+docs/downloads/builder-*.yml
+docs/downloads/*.blockmap
+docs/downloads/*.exe
+docs/downloads/*.sha256

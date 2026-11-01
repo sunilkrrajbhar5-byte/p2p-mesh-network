@@ -1,0 +1,25 @@
+{
+  "id": "./desktop.html",
+  "name": "SR Mesh Desktop",
+  "short_name": "SR Mesh",
+  "start_url": "./desktop.html?force=desktop&pwa=1",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#00F2FE",
+  "background_color": "#07090E",
+  "description": "Offline desktop portal for nearby SR Mesh gateways",
+  "icons": [
+    {
+      "src": "desktop-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "desktop-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

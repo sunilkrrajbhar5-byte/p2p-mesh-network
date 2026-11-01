@@ -43,7 +43,7 @@ test('HTTP portal and About return 200 and all internal links resolve',async()=>
    const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);assert.equal(ids.length,new Set(ids).size);
    for(const [,href] of html.matchAll(/<a\b[^>]*href="([^"]+)"/g)){
     const url=new URL(href,base+file);if(url.origin!==new URL(base).origin)continue;
-    const linked=await fetch(url);assert.equal(linked.status,200,`${file}: ${href}`);
+    const linked=await fetch(url,{method:url.pathname.endsWith(".exe")?"HEAD":"GET"});assert.equal(linked.status,200,`${file}: ${href}`);
     if(url.hash)assert.ok((await linked.text()).includes(`id="${url.hash.slice(1)}"`),href);
    }
   }
