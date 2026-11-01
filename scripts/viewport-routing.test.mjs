@@ -32,8 +32,14 @@ test('routing preserves gateway parameters and section anchors', () => {
   assert.equal(redirect('index.html',1024,query,'#gateway'),'desktop.html'+query+'#gateway');
   assert.equal(redirect('desktop.html',390,query,'#download'),'index.html'+query+'#download');
 });
-test('both layouts retain identical existing application scripts', () => {
-  const scripts = html => [...html.matchAll(/<script(?:\s+[^>]*)?>([\s\S]*?)<\/script>/g)]
-    .filter(match => !match[0].includes('id="viewport-routing"')).map(match => match[1]);
-  assert.deepEqual(scripts(pages['index.html']),scripts(pages['desktop.html']));
+test('redesigned desktop retains secure gateway and official download entry points', () => {
+  const desktop=pages['desktop.html'];
+  assert.match(desktop, /id="gateway-form"/);
+  assert.match(desktop, /id="paste"/);
+  assert.match(desktop, /id="scan"/);
+  assert.match(desktop, /url.protocol!==\'https:\'/);
+  assert.match(desktop, /url.username \|\| url.password/);
+  assert.match(desktop, /releases\/latest\/download\/SR-Mesh\.apk/);
+  assert.match(desktop, /\.exe not published/);
+  assert.match(desktop, /\.dmg not published/);
 });
