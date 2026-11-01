@@ -8,7 +8,9 @@ const {GatewayTransport}=require('./transport');
 let win,transport,scanPromise;
 const iconPath=path.join(__dirname,'assets','icon.ico');
 // Preserve the existing profile directory while updating the visible product name.
-app.setPath('userData',path.join(app.getPath('appData'),'SR Mesh Workspace'));
+const profilePath=path.join(app.getPath('appData'),'SR Mesh Workspace');
+require('node:fs').mkdirSync(profilePath,{recursive:true});
+app.setPath('userData',profilePath);
 if(process.platform==='win32')app.setAppUserModelId('com.srsystems.srmesh.workspace');
 const dashboard=app.isPackaged?path.join(process.resourcesPath,'gateway.html'):path.join(__dirname,'../docs/gateway.html');
 function trusted(event){if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame||event.senderFrame.url!==pathToFileURL(dashboard).href)throw Error('Untrusted request');}
