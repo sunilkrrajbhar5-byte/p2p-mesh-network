@@ -16,17 +16,50 @@ async function gatewayUrl(value) {
   return url.origin+'/';
 }
 function candidates(interfaces=os.networkInterfaces()) {
-  const hosts=new Set(['192.168.49.1','192.168.43.1']);
+  // Bounded /24 fallback: default Android ranges plus at most two active LAN slices.
+  const prefixes=new Set(['192.168.49','192.168.43']);
   for(const entries of Object.values(interfaces))for(const item of entries||[]) {
-    if(item.family==='IPv4' && !item.internal && privateAddress(item.address) && hosts.size<8)
-      hosts.add(item.address.split('.').slice(0,3).join('.')+'.1');
+    if(item.family==='IPv4' && !item.internal && privateAddress(item.address) && prefixes.size<4)
+      prefixes.add(item.address.split('.').slice(0,3).join('.'));
   }
-  return [...hosts].flatMap(host=>[`https://${host}:8443/`,`http://${host}:8080/`]);
+  const hosts=[];
+  for(let suffix=1;suffix<=254;suffix++)for(const prefix of prefixes)hosts.push(`${prefix}.${suffix}`);
+  return hosts.flatMap(host=>[`https://${host}:8443/`,`http://${host}:8080/`]);
+}
+async function discover({onFound=()=>{},interfaces=os.networkInterfaces(),probeFn=probe,mdns=true,signal}={}) {
+  const urls=candidates(interfaces),queued=new Set(urls),found=new Map();
+  let bonjour,browser;
+  // DNS-SD queries use multicast UDP through the maintained Bonjour implementation.
+  // Older Android gateways do not advertise SR Mesh, so HTTP fingerprint fallback remains essential.
+  if(mdns)try {
+    const {Bonjour}=require('bonjour-service');bonjour=new Bonjour({},()=>{});
+    browser=bonjour.find({type:'srmesh'},service=>{
+      if(![8080,8443].includes(service.port))return;
+      for(const host of service.addresses||[])if(privateAddress(host)) {
+        const url=`${service.port===8443?'https':'http'}://${host}:${service.port}/`;
+        if(!queued.has(url) && queued.size<2064){queued.add(url);urls.unshift(url);}
+      }
+    });
+  } catch { /* Multicast may be blocked; unicast discovery still runs. */ }
+  try {
+    while(urls.length && !signal?.aborted) {
+      const batch=urls.splice(0,128);
+      await Promise.all(batch.map(async url=>{
+        if(signal?.aborted)return;
+        if(!await probeFn(url,300))return;
+        const parsed=new URL(url),previous=found.get(parsed.hostname);
+        if(previous?.secure || (previous && parsed.protocol==='http:'))return;
+        const node={id:parsed.hostname,url,label:'SR Mesh gateway',secure:parsed.protocol==='https:',signal:null};
+        found.set(node.id,node);if(!signal?.aborted)onFound(node);
+      }));
+    }
+    return [...found.values()];
+  } finally {browser?.stop();bonjour?.destroy();}
 }
 function probe(url,timeout=1800) {
   return new Promise(resolve=>{
     let body='',done=false; const finish=value=>{if(done)return;done=true;clearTimeout(deadline);resolve(value);};
-    const req=(url.startsWith('https:')?https:http).get(url,{headers:{'User-Agent':'SR-Mesh-Discovery/1.0.2'}},res=>{
+    const req=(url.startsWith('https:')?https:http).get(url,{headers:{'User-Agent':'SR-Mesh-Discovery/1.0.3'}},res=>{
       if(res.statusCode!==200){res.destroy();finish(false);return;}
       res.on('data',chunk=>{body+=chunk.toString();if(Buffer.byteLength(body)>65536){res.destroy();finish(false);}});
       res.on('end',()=>finish(body.includes('Offline Mesh') && body.includes('/login') && body.includes('/ws')));
@@ -36,4 +69,4 @@ function probe(url,timeout=1800) {
     req.on('error',()=>finish(false));
   });
 }
-module.exports={privateAddress,gatewayUrl,candidates,probe};
+module.exports={privateAddress,gatewayUrl,candidates,probe,discover};

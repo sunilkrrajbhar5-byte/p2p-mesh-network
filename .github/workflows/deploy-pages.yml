@@ -25,8 +25,10 @@ jobs:
           GH_REPO: sunilkrrajbhar5-byte/p2p-mesh-network
         run: |
           mkdir -p docs/downloads
-          gh release download windows-v1.0.2 --pattern '*.exe' --pattern '*.sha256' --dir docs/downloads
-          (cd docs/downloads && sha256sum --check SR-Mesh-Windows-v1.0.2.sha256)
+          gh release download windows-v1.0.3 --pattern '*.exe' --pattern '*.sha256' --dir docs/downloads
+          (cd docs/downloads && sha256sum --check SR-Mesh-Windows-v1.0.3.sha256)
+      - name: Verify portal routes and packaged download links
+        run: node --test scripts/comprehensive-web.test.mjs scripts/desktop-install.test.mjs scripts/viewport-routing.test.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

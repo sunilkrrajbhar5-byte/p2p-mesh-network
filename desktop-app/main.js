@@ -1,7 +1,7 @@
 const {app,BrowserWindow,ipcMain,dialog,shell}=require('electron');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
-const {gatewayUrl,candidates,probe}=require('./network');
+const {gatewayUrl,probe,discover}=require('./network');
 let launcher,discovering=null;const gateways=new Set();
 const launcherPath=path.join(__dirname,'launcher.html');
 const launcherUrl=pathToFileURL(launcherPath).href;
@@ -16,9 +16,10 @@ function createLauncher(){
 }
 ipcMain.handle('mesh:discover',async event=>{
  trusted(event);if(discovering)return discovering;
- discovering=(async()=>{const urls=candidates(),found=[];let index=0;
-  await Promise.all(Array.from({length:4},async()=>{while(index<urls.length){const url=urls[index++];if(await probe(url))found.push(url);}}));return found;
- })();try{return await discovering;}finally{discovering=null;}
+ const controller=new AbortController();
+ const cancel=()=>controller.abort();event.sender.once('destroyed',cancel);
+ discovering=discover({signal:controller.signal,onFound:node=>{if(!event.sender.isDestroyed())event.sender.send('mesh:found',node);}});
+ try{return await discovering;}finally{event.sender.removeListener('destroyed',cancel);discovering=null;}
 });
 ipcMain.handle('mesh:open',async(event,value)=>{
  trusted(event);const url=await gatewayUrl(value);

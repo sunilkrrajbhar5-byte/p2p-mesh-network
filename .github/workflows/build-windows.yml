@@ -27,7 +27,7 @@ jobs:
           if ($client.HasExited) { throw "Packaged client exited unexpectedly: $($client.ExitCode)" }
           Stop-Process -Id $client.Id
           $lines = Get-ChildItem docs/downloads/*.exe | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
-          $lines | Set-Content docs/downloads/SR-Mesh-Windows-v1.0.2.sha256 -Encoding ascii
+          $lines | Set-Content docs/downloads/SR-Mesh-Windows-v1.0.3.sha256 -Encoding ascii
       - uses: actions/upload-artifact@v4
         with:
           name: SR-Mesh-Windows-x64
@@ -42,5 +42,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         shell: pwsh
         run: |
-          gh release create $env:GITHUB_REF_NAME docs/downloads/*.exe docs/downloads/*.sha256 --verify-tag --latest=false --title 'SR Mesh Windows v1.0.2' --notes 'Windows x64 installer and portable client. Connect to an Android local mesh gateway for offline communication. Unsigned binaries; no Windows signing certificate is configured. SHA-256 checksums included.'
+          gh release create $env:GITHUB_REF_NAME docs/downloads/*.exe docs/downloads/*.sha256 --verify-tag --latest=false --title 'SR Mesh Windows v1.0.3' --notes 'Windows x64 installer and portable client. Connect to an Android local mesh gateway for offline communication. Unsigned binaries; no Windows signing certificate is configured. SHA-256 checksums included.'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

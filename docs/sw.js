@@ -1,5 +1,5 @@
 /* Desktop-only caching. Mobile index/root requests and gateway traffic are never intercepted. */
-const CACHE='sr-mesh-desktop-v1.0.2-1';
+const CACHE='sr-mesh-desktop-v1.0.3-1';
 const assets=['desktop.html','manifest.json','desktop-icon-192.png','desktop-icon-512.png'];
 const urls=assets.map(file=>new URL(file,self.registration.scope).href);
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(urls))));

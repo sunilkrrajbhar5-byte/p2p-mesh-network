@@ -1,11 +1,16 @@
-SR Mesh Desktop 1.0.2 (Windows x64)
+SR Mesh Desktop 1.0.3 (Windows x64)
 
 npm ci
 npm run build:win
 Builds docs/downloads/SR-Mesh-Windows-Setup-v1.0.2.exe and portable equivalent.
 Electron and electron-builder are pinned development dependencies; runtime has no npm dependency downloads.
 The launcher is packaged locally; join Android host Wi-Fi, scan or enter a local gateway origin.
-Detection probes at most 16 private endpoints with four workers and bounded timeout/response size.
+Detection browses _srmesh._tcp via multicast DNS and probes up to four private /24 slices on 8080/8443.
+Fallback uses 128 concurrent probes per batch, each with a 300ms deadline and 64KB response limit.
+Default Android subnets plus up to two active LAN slices are scanned; this is LAN discovery, not Wi-Fi radio scanning.
+Older Android hosts need not advertise mDNS: the HTTP compatibility probe finds them.
+Discovery repeats every 15 seconds while visible; manual override stays collapsed.
+Signal strength and host identity are unavailable before authentication and are never fabricated.
 It checks the existing Offline Mesh /login and /ws protocol, then opens the host UI in an isolated
 sandboxed window. Fingerprinting is compatibility detection, not authentication. Enter the host key
 in that window. No Node integration/preload is given to the gateway. Normal TLS validation remains on.
