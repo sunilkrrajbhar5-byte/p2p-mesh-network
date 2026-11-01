@@ -1,6 +1,9 @@
 package com.example.mesh
 
 import android.widget.Toast
+import android.content.Intent
+import android.content.ActivityNotFoundException
+import android.provider.Settings
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -57,6 +60,8 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
     val nearby by engine.nearby.collectAsStateWithLifecycle()
     val connections by engine.connections.collectAsStateWithLifecycle()
     val status by engine.status.collectAsStateWithLifecycle()
+    val resolution by engine.networkResolution.collectAsStateWithLifecycle()
+    val settingsRetry = remember(engine) { NetworkSettingsRetry() }
     val chat by engine.chat.collectAsStateWithLifecycle()
     val transfer by engine.transfer.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf<String?>(null) }
@@ -73,7 +78,11 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
             engine.consent.setUiVisible(resumed)
             networkGranted = WifiDirectManager.requiredPermissions().all { context.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
         }
-        val observer = LifecycleEventObserver { _, _ -> update() }
+        val observer = LifecycleEventObserver { _, event ->
+            update()
+            if (event == Lifecycle.Event.ON_PAUSE) settingsRetry.paused()
+            if (event == Lifecycle.Event.ON_RESUME && settingsRetry.resumed()) engine.refresh()
+        }
         owner.lifecycle.addObserver(observer); update(); engine.start()
         onDispose { owner.lifecycle.removeObserver(observer); engine.shutdown() }
     }
@@ -191,7 +200,36 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
         }
         item("version") { MeshVersionTag() }
     }
-    IncomingConnectionDialog(engine.consent)
+    if (resolution == null) IncomingConnectionDialog(engine.consent)
+    if (resumed) resolution?.let { issue ->
+        AlertDialog(
+            onDismissRequest = engine::dismissNetworkResolution,
+            title = { Text(issue.title) },
+            text = { Text(issue.description) },
+            confirmButton = { TextButton(onClick = {
+                val action = when (issue) {
+                    NetworkResolution.HOTSPOT -> "android.settings.TETHER_SETTINGS"
+                    NetworkResolution.WIFI -> Settings.ACTION_WIFI_SETTINGS
+                    NetworkResolution.LOCATION -> Settings.ACTION_LOCATION_SOURCE_SETTINGS
+                }
+                val opened = listOf(action, Settings.ACTION_WIRELESS_SETTINGS, Settings.ACTION_SETTINGS)
+                    .distinct().any { candidate ->
+                        try {
+                            context.startActivity(Intent(candidate))
+                            true
+                        } catch (_: ActivityNotFoundException) { false }
+                        catch (_: SecurityException) { false }
+                    }
+                if (opened) {
+                    settingsRetry.opened()
+                    engine.dismissNetworkResolution()
+                } else Toast.makeText(context, "Settings नहीं खुलीं। फ़ोन की Settings खोलें।", Toast.LENGTH_LONG).show()
+            }) { Text("सेटिंग्स खोलें (Open Settings)") } },
+            dismissButton = { TextButton(onClick = engine::dismissNetworkResolution) {
+                Text("रद्द करें (Cancel)")
+            } }
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

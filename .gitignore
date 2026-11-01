@@ -4,6 +4,7 @@ build/
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 .gradle/
+.kotlin/
 local.properties
 **/build/
 *.keystore

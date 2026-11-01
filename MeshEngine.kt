@@ -33,6 +33,9 @@ class MeshEngine(context: Context, val localId: String) {
     val connections = connectionsState.asStateFlow()
     private val statusState = MutableStateFlow("Starting nearby discovery…")
     val status = statusState.asStateFlow()
+    private val resolutionState = MutableStateFlow<NetworkResolution?>(null)
+    val networkResolution = resolutionState.asStateFlow()
+    fun dismissNetworkResolution() { resolutionState.value = null }
     private val textState = MutableStateFlow<List<String>>(emptyList())
     val chat = textState.asStateFlow()
     private val progressState = MutableStateFlow<FileTransferUi?>(null)
@@ -50,10 +53,26 @@ class MeshEngine(context: Context, val localId: String) {
     fun notify(message: String) { messageChannel.trySend(message) }
     private fun launchOperation(block: suspend () -> Unit) = scope.launch {
         try { block() } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { statusState.value = e.message ?: "Connection failed"; if (e !is RequestDeclinedException) notify(statusState.value) }
+        catch (e: Exception) { reportFailure(e) }
+    }
+    private fun reportFailure(e: Exception) {
+        statusState.value = e.message ?: "Connection failed"
+        if (e is NetworkResolutionException) resolutionState.value = e.resolution
+        else if (e !is RequestDeclinedException) notify(statusState.value)
     }
     fun start() { launchOperation { operation.withLock { if (transport == null) host() } } }
-    fun refresh() { launchOperation { transport?.discoverIdentities(); statusState.value = "Searching nearby devices" } }
+    fun refresh() { launchOperation { operation.withLock {
+        dismissNetworkResolution()
+        val manager = transport
+        if (manager == null || manager.state.value is WifiDirectManager.State.Idle ||
+            manager.state.value is WifiDirectManager.State.Failed) {
+            stopTransport(); host()
+        } else {
+            manager.discoverIdentities()
+            statusState.value = "Searching nearby devices"
+            startDiscovery(manager)
+        }
+    } } }
     private suspend fun host() {
         val manager = createTransport(ClusterController(localId, UUID.randomUUID(), localId))
         val state = manager.startOwner()
@@ -67,6 +86,7 @@ class MeshEngine(context: Context, val localId: String) {
             while (isActive && transport === manager) {
                 try { manager.discoverIdentities() }
                 catch (e: CancellationException) { throw e }
+                catch (e: NetworkResolutionException) { reportFailure(e); break }
                 catch (e: Exception) { statusState.value = e.message ?: "Discovery unavailable" }
                 delay(12_000)
             }

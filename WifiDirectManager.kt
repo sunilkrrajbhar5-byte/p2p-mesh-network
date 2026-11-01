@@ -193,11 +193,12 @@ class WifiDirectManager(
     }
 
     private fun checkLocationMode() {
+        if (!wifi.isWifiEnabled) throw NetworkResolutionException(NetworkResolution.WIFI)
         val location = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val enabled = if (Build.VERSION.SDK_INT >= 28) location.isLocationEnabled
         else location.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
             location.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        check(enabled) { "Enable Location in system settings for Wi-Fi discovery on this device" }
+        if (!enabled) throw NetworkResolutionException(NetworkResolution.LOCATION)
     }
 
     suspend fun discoverPeers() = onMain {
@@ -253,6 +254,7 @@ class WifiDirectManager(
     /** Owner startup automatically falls back after a bounded Direct failure/timeout. */
     suspend fun startOwner(): State = onMain {
         checkPermissions()
+        checkLocationMode()
         check(cluster.isOwner) { "This identity is not the configured owner" }
         check(mutableState.value is State.Idle) { "Stop the previous home connection first" }
         mutableState.value = State.Starting("Wi-Fi Direct owner")
@@ -283,6 +285,7 @@ class WifiDirectManager(
      */
     suspend fun connectDirect(deviceAddress: String, fallback: HotspotInvitation? = null): State = onMain {
         checkPermissions()
+        checkLocationMode()
         check(!cluster.isOwner)
         check(mutableState.value is State.Idle)
         mutableState.value = State.Starting("Wi-Fi Direct client")
@@ -673,7 +676,11 @@ class WifiDirectManager(
                 }
             }
             override fun onFailed(reason: Int) {
-                ready.completeExceptionally(IOException("Local-only hotspot failed (Android reason $reason)"))
+                if (epoch != hotspotEpoch || closed || !ready.isActive) return
+                val failure = if (reason == WifiManager.LocalOnlyHotspotCallback.ERROR_INCOMPATIBLE_MODE)
+                    NetworkResolutionException(NetworkResolution.HOTSPOT)
+                else IOException("Local-only hotspot failed (Android reason $reason)")
+                ready.completeExceptionally(failure)
             }
         }
         try {
