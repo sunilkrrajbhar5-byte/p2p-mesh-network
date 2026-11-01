@@ -21,5 +21,11 @@
       "type": "image/png",
       "purpose": "any"
     }
+  ],
+  "prefer_related_applications": false,
+  "lang": "en",
+  "categories": [
+    "communication",
+    "utilities"
   ]
 }

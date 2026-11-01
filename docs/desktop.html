@@ -23,6 +23,7 @@
 @media(max-width:767px){.shell{width:calc(100% - 28px)}.top{flex-wrap:wrap;padding-block:18px;gap:14px}.brand{font-size:19px}nav{justify-content:flex-start;gap:16px}.live-row{justify-content:flex-start}.hero{grid-template-columns:1fr;gap:30px;padding-top:25px}h1{font-size:44px}.platforms{grid-template-columns:repeat(2,minmax(0,1fr))}.radar-card{max-width:520px;width:100%}.footer-inner{grid-template-columns:1fr;gap:10px}.footer-center,.footer-right{text-align:left}.next ol{display:grid;gap:10px}.download-title span{display:none}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .gateway-radar{position:relative;width:150px;aspect-ratio:1;margin:20px auto;border-radius:50%;overflow:hidden;border:1px solid #00f2fe66;background:repeating-radial-gradient(circle,transparent 0 18%,#00f2fe30 19% 20%)}.native-discovery{padding:10px 13px;border:1px solid #10b98166;border-radius:8px;color:#9bffe1;font-size:12px}#manual-override{border-top:1px solid #00f2fe26;padding-top:14px;margin-top:20px}#manual-override summary{cursor:pointer;font-size:12px;color:#89b8c7}#browser-guidance{border-left:2px solid #10b981;padding-left:12px;margin-top:20px}
+.install-primary{margin-top:auto;padding:12px 15px;border:1px solid #00f2fe70;border-radius:9px;background:linear-gradient(110deg,#00f2fe,#10b981);color:#05202a;font-weight:750;font-size:12px}.install-primary:disabled{opacity:.65;cursor:default}
 </style>
 </head>
 <body>
@@ -40,7 +41,7 @@
 <div class="radar-card glass"><div class="radar-top"><span>P2P DISCOVERY AIRSPACE</span><span>INTERACTIVE DEMO</span></div><div class="radar-stage"><div class="radar-disc" id="radar"><div class="beam" aria-hidden="true"></div><svg class="radar-lines" viewBox="0 0 100 100" aria-hidden="true"><path d="m20 36 27-15 34 23-17 32-30-2L20 36l30 14 31-6M47 21l3 29 14 26M34 74l16-24"/></svg><span class="origin"></span><button class="peer" style="left:20%;top:36%" aria-label="Preview peer Amit" data-peer="Amit#12345"></button><button class="peer" style="left:47%;top:21%;--delay:.3s" aria-label="Preview peer Vikas" data-peer="Vikas#9876"></button><button class="peer" style="left:81%;top:44%;--delay:.8s" aria-label="Preview peer Asha" data-peer="Asha#65210"></button><button class="peer" style="left:64%;top:76%;--delay:1s" aria-label="Preview peer Ravi" data-peer="Ravi#21890"></button><button class="peer" style="left:34%;top:74%;--delay:1.3s" aria-label="Preview peer Neha" data-peer="Neha#56324"></button></div></div><p class="radar-caption" id="peer-caption" aria-live="polite">Select a glowing peer to explore the demo.</p><div class="radar-metrics"><a href="about.html#coverage">📡 Up to 5 km mesh target*</a><span>Local P2P • No mobile data</span><span>Simulated nodes • Not a live scan</span></div><button class="motion" id="motion" type="button" aria-pressed="false">Pause radar animation</button></div></section>
 <section id="downloads" aria-labelledby="downloads-title"><div class="download-title"><h2 id="downloads-title">ONE MESH. EVERY SCREEN.</h2><span>CHOOSE YOUR WAY TO CONNECT</span></div><div class="platforms">
 <article class="platform glass"><svg aria-hidden="true"><use href="#android"/></svg><h3>Android APK</h3><p>The native SR Mesh experience.</p><a id="android-download" href="https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/releases/latest/download/SR-Mesh.apk">Download Android (.apk) • <span data-version>v1.0.3</span></a><small>Official GitHub release • SR-Mesh.apk</small></article>
-<article class="platform glass"><svg aria-hidden="true"><use href="#windows"/></svg><h3>Windows Desktop</h3><p>Your local mesh, on the big screen.</p><a href="downloads/SR-Mesh-Windows-Setup-v1.0.3.exe" download class="download-btn">Download Windows (.exe) • 64-bit</a><small><a href="downloads/SR-Mesh-Windows-Portable-v1.0.3.exe" download>Portable version</a> • v1.0.3</small><button id="install-app" class="motion" type="button">Install App directly</button><small id="install-status" role="status">Desktop PWA • offline launcher</small></article>
+<article class="platform glass"><svg aria-hidden="true"><use href="#windows"/></svg><h3>Windows Desktop</h3><p>Install the offline-ready desktop web app.</p><button id="install-app" class="install-primary" type="button" aria-describedby="install-status">Install Web App on PC</button><small id="install-status" role="status" aria-live="polite">Chrome / Edge • No EXE download required</small></article>
 <article class="platform glass"><svg aria-hidden="true"><use href="#apple"/></svg><h3>macOS App</h3><p>Connect from your Mac browser.</p><a href="#gateway" data-gateway>Open macOS Web Client</a><small>Browser access • .dmg not published</small></article>
 <article class="platform glass"><svg aria-hidden="true"><use href="#globe"/></svg><h3>Web Gateway</h3><p>Join your nearby Android host.</p><a href="#gateway" data-gateway>Open Web Client • No Install Required</a><small>Trusted local HTTPS gateway required</small></article>
 </div></section>
@@ -51,24 +52,31 @@
 <dialog id="gateway" aria-labelledby="gateway-title"><div class="dialog-top"><h2 id="gateway-title">Airspace discovery / आस-पास के नोड्स</h2><button class="close" id="close-gateway" type="button" aria-label="Close gateway dialog">✕</button></div>
 <div class="gateway-radar" aria-hidden="true"><div class="beam"></div><span class="origin"></span></div>
 <p id="discovery-status" role="status">Automatic LAN discovery is available in the Windows desktop app. Browsers cannot send UDP/mDNS discovery packets.</p>
-<div class="actions"><a class="native-discovery" href="downloads/SR-Mesh-Windows-Setup-v1.0.3.exe" download>Get automatic discovery — Windows app ↗</a><button id="scan" type="button">📷 Scan Host QR</button><button id="paste" type="button">📋 Paste &amp; Connect</button></div>
+<div class="actions"><a class="native-discovery" href="https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/releases/tag/windows-v1.0.3">Optional native client for LAN discovery ↗</a><button id="scan" type="button">📷 Scan Host QR</button><button id="paste" type="button">📋 Paste &amp; Connect</button></div>
 <div id="browser-guidance"><p>1. 📱 Ensure your phone’s SR Mesh app is open and its gateway is running.</p><p>2. 📶 Connect this laptop’s Wi-Fi to the phone’s mesh/hotspot.</p></div>
 <details id="manual-override"><summary>⚙️ Advanced / Manual IP Override (Optional)</summary><form id="gateway-form"><label for="gateway-url">Gateway address / गेटवे एड्रेस</label><input id="gateway-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" required placeholder="https://gateway-address:8443/"><div class="actions"><button class="primary" type="submit">Launch Web Client ↗</button></div></form></details>
 <p id="gateway-error" class="error" role="status"></p><video id="scanner" autoplay muted playsinline hidden></video><p>QR connects directly to the host. Authentication and trusted HTTPS requirements remain enabled.</p></dialog>
 <script>
 (() => {
   'use strict';
-  let installEvent=null;
+  // PWA install controller: the browser owns eligibility and final confirmation.
+  let installEvent=null,installed=window.matchMedia('(display-mode: standalone)').matches;
   const installButton=document.getElementById('install-app'), installStatus=document.getElementById('install-status');
-  if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{installStatus.textContent='Offline installation unavailable. Use the Windows installer.';});
-  window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installEvent=event;installStatus.textContent='Ready to install • no installer required';});
-  window.addEventListener('appinstalled',()=>{installEvent=null;installButton.disabled=true;installStatus.textContent='App installed';});
+  function showInstalled(){installed=true;installEvent=null;installButton.disabled=true;installStatus.textContent='App installed — open SR Mesh from your apps';}
+  if(installed)showInstalled();
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{if(!installed)installStatus.textContent='Offline setup failed. Reconnect and reload this page to try again.';});
+  window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();if(installed)return;installEvent=event;installButton.disabled=false;installStatus.textContent='Ready to install • no EXE download required';});
+  window.addEventListener('appinstalled',showInstalled);
   installButton.addEventListener('click',async()=>{
-    if(window.matchMedia('(display-mode: standalone)').matches){installStatus.textContent='Already running as an installed app';return;}
-    if(!installEvent){installStatus.textContent='In Edge/Chrome use the address-bar Install icon or browser menu → Install this site as an app. Browser approval is required.';return;}
-    const prompt=installEvent;installEvent=null;await prompt.prompt();const choice=await prompt.userChoice;
-    installStatus.textContent=choice.outcome==='accepted'?'Installation requested':'Installation cancelled. You can install later from the browser menu.';
+    if(installed)return;
+    if(!installEvent){installStatus.textContent='In Chrome/Edge, use the address-bar Install icon or browser menu → Install this site as an app. If unavailable, open this page in a supported browser outside private mode.';return;}
+    const prompt=installEvent;installEvent=null;installButton.disabled=true;
+    try{await prompt.prompt();const choice=await prompt.userChoice;
+      if(!installed)installStatus.textContent=choice.outcome==='accepted'?'Installation requested — finish the browser confirmation':'Installation cancelled. You can try again from the browser menu.';
+    }catch{if(!installed)installStatus.textContent='Install prompt unavailable. Use the Chrome/Edge browser menu to install.';}
+    finally{installButton.disabled=installed;}
   });
+  // End PWA install controller.
 
   const $ = id => document.getElementById(id);
   const radar = $('radar');

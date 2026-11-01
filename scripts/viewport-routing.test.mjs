@@ -40,6 +40,7 @@ test('redesigned desktop retains secure gateway and official download entry poin
   assert.match(desktop, /url.protocol!==\'https:\'/);
   assert.match(desktop, /url.username \|\| url.password/);
   assert.match(desktop, /releases\/latest\/download\/SR-Mesh\.apk/);
-  assert.match(desktop, /downloads\/SR-Mesh-Windows-Setup-v1\.0\.3\.exe/);
+  assert.match(desktop, /Install Web App on PC/);
+  assert.doesNotMatch(desktop, /href="downloads\/[^"]+\.exe"/);
   assert.match(desktop, /\.dmg not published/);
 });

@@ -23,3 +23,22 @@ test('offline desktop navigation uses the cached shell independent of query para
  handlers.fetch({request:{method:'GET',url:'https://example.com/p2p-mesh-network/desktop.html?force=desktop&pwa=1'},respondWith(value){result=value;}});
  assert.equal(await result,'cached desktop');assert.equal(key,'https://example.com/p2p-mesh-network/desktop.html');
 });
+const portal=await readFile(new URL('desktop.html',docs),'utf8');
+const installCode=portal.split('// PWA install controller:')[1].split('// End PWA install controller.')[0].split('\n').slice(1).join('\n');
+function installFixture(standalone=false){
+ const events={},button={disabled:false,addEventListener:(_name,fn)=>button.click=fn},status={textContent:''};
+ vm.runInNewContext(installCode,{window:{matchMedia:()=>({matches:standalone}),addEventListener:(name,fn)=>events[name]=fn},document:{getElementById:id=>id==='install-app'?button:status},navigator:{serviceWorker:{register:()=>Promise.resolve()}}});
+ return {events,button,status};
+}
+test('install button consumes native prompt only after user click and handles installed state',async()=>{
+ const {events,button,status}=installFixture();let prompted=0,prevented=false;
+ events.beforeinstallprompt({preventDefault(){prevented=true;},async prompt(){prompted++;},userChoice:Promise.resolve({outcome:'accepted'})});
+ assert.equal(prevented,true);assert.equal(prompted,0);await button.click();assert.equal(prompted,1);assert.match(status.textContent,/Installation requested/);
+ events.appinstalled();assert.equal(button.disabled,true);assert.match(status.textContent,/App installed/);
+});
+test('unsupported, dismissed and rejected install prompts have recoverable guidance',async()=>{
+ const {events,button,status}=installFixture();await button.click();assert.match(status.textContent,/Chrome\/Edge/);
+ events.beforeinstallprompt({preventDefault(){},async prompt(){},userChoice:Promise.resolve({outcome:'dismissed'})});await button.click();assert.match(status.textContent,/cancelled/);assert.equal(button.disabled,false);
+ events.beforeinstallprompt({preventDefault(){},async prompt(){throw Error('Unavailable');}});await button.click();assert.match(status.textContent,/browser menu/);assert.equal(button.disabled,false);
+ assert.equal(installFixture(true).button.disabled,true);
+});
