@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-01",
+  "sourceCommit": "f2820fc",
+  "workflowRun": 41267436885,
+  "jvm": {
+    "total": 19,
+    "passed": 16,
+    "skipped": 3,
+    "failures": 0,
+    "errors": 0
+  },
+  "web": {
+    "passed": 18,
+    "failures": 0
+  },
+  "gradleTests": "passed",
+  "taskGraphDryRun": "passed",
+  "debugAssembly": "passed",
+  "releaseAssembly": "passed",
+  "apkSignature": "verified",
+  "localGradle": "blocked: missing Android SDK 35 and license setup",
+  "gaps": [
+    "Automatic alternate-route discovery not implemented",
+    "5 km RF coverage not measurable in a virtual topology",
+    "Native codecs and device/cross-OS interoperability not tested"
+  ]
+}

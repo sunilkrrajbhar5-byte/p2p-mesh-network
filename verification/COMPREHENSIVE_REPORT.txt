@@ -1,0 +1,107 @@
+SR MESH - COMPREHENSIVE MASTER VERIFICATION
+Date: 1 November 2026 (Asia/Calcutta)
+Test source commit: f2820fc
+CI: https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/actions/runs/41267436885
+
+PURPOSE AND BOUNDARY
+Device-free integration verification of implemented protocol components. This is
+not certification of RF coverage, OEM Wi-Fi Direct behavior, codec playback,
+E2EE, automatic mesh routing, or interoperability across physical operating systems.
+
+REPRODUCING
+  ./gradlew testDebugUnitTest --continue
+  ./gradlew testDebugUnitTest assembleRelease --dry-run
+  ./gradlew :app:assembleDebug :app:assembleRelease
+  node --test scripts/comprehensive-web.test.mjs scripts/landing-stats.test.mjs scripts/github-portal.test.mjs scripts/github-stats.test.mjs scripts/gateway-helpers.test.mjs
+
+Release builds require KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS and
+KEY_PASSWORD. CI restores the keystore from the existing KEYSTORE_BASE64 secret.
+No credentials are included in test reports. verify_only=true runs tests and
+builds without replacing a GitHub Release asset.
+
+MODULE 1 - DATA TRANSFER
+PASS: Short text, Hindi, emoji and JSON round-trip through real loopback TCP
+using production MeshPacket framing, with exact UTF-8 equality.
+PASS: JSON record payload over 1 MiB round-trips through ChunkManager and parses
+back identically. A single oversized chat frame is correctly rejected: native
+framing uses a 16-bit body length; this is NOT support for a 1 MiB chat message.
+PASS: Synthetic recording-like binary data at 512 KiB, 2 MiB and 5 MiB, for both
+.m4a and .mp3 filenames. Validates production PRE_ALERT filename, size and digest,
+fragment order, reassembly, SHA-256, CRC32 and delivery ACK. These are opaque
+bytes, not valid codec fixtures; audio container parsing/playback is untested.
+PASS: 10 MiB and 50 MiB video-like bytes with both 64 KiB and 128 KiB socket I/O
+buffers. Production file chunks remain 512 KiB with up-to-32 KiB wire fragments.
+Tests assert every fragment index, monotonic progress from 0 to total bytes,
+exact reconstructed data and verified delivery state. This is not video decoding.
+PASS: Injected socket closure after two file fragments fails promptly and cleans
+up sockets/jobs; a new connection and full transfer succeeds. No automatic resume
+or in-place reconnection is claimed. A stalled read raises SocketTimeoutException;
+a subsequent IO-dispatcher task remains responsive.
+PASS: A real multi-entry ZIP (Unicode text, binary file and empty file) transfers
+with exact SHA-256/CRC32 equality and matching decompressed entries.
+
+MODULE 2 - TOPOLOGY
+PASS: Virtual A -> B -> C -> D -> E forwarding uses RelayPacketFilter with
+in-memory links. Hop observations are B=1, C=2, D=3, E=4; remaining TTL is 21.
+PASS: Duplicate packet suppression, expired TTL and failed next-hop writes.
+PASS: Reverse DELIVERY_ACK envelope traverses E -> D -> C -> B -> A. Production
+READY/VERIFIED transfer ACKs are additionally exercised by direct TCP transfers
+and the existing memory-bridge file-transfer regression.
+PASS: After C fails, an explicitly supplied A -> B -> F -> D -> E route delivers.
+SKIPPED / NOT IMPLEMENTED: Automatic alternate-route discovery after losing C.
+Route-cache learning, expiration and 3-second heartbeat cadence are tested by
+existing Step2Checks; this is not autonomous network topology discovery.
+SKIPPED / NOT MEASURABLE HERE: 5 km RF coverage. Virtual nodes have no distance;
+current frame TTL is 25 and automatic multi-hop integration is incomplete.
+Relay storage is bounded RAM forwarding, not a durable disconnected store-and-
+forward queue. No such persistence capability is asserted.
+
+ADDITIONAL PROTOCOL REGRESSIONS
+MeshPacket framing/malformed input; concurrent cluster admission and bridge
+lifecycle; route expiration/heartbeats; relay buffer wiping, bounds, cancellation
+and LRU; priority ordering; 64-bit file offsets; corruption rejection; empty-file
+ACK; consent accept/reject/replay/background/cancellation; voice packet bounds;
+UI progress math; native/browser bridge routing and WebSocket frame validation.
+Bridge adapters use mock writes; a real HTTPS browser-to-host session is not
+established by this suite. Cross-OS/device interoperability remains unverified.
+SKIPPED: Native audio codec/hardware and cross-platform runtime interoperability.
+
+MODULE 3 - WEB
+18 automated Node checks pass locally. Tests serve docs over a loopback HTTP
+server, assert index.html/about.html return 200, resolve all local anchor links,
+check unique IDs/UTF-8, exercise menu toggle/icon/ARIA/outside-click/link/Escape,
+validate GitHub download pagination/counts and labeled rate-limit fallback, and
+retain existing gateway paste/QR-camera cleanup and URL-validation regressions.
+DOM interactions in these tests use controlled fixtures; real camera permissions
+and device browser behavior are outside this run.
+
+MODULE 4 - ANDROID / BUILD
+Local Windows Gradle attempt was blocked by missing Android SDK Platform 35 and
+unaccepted SDK licenses. No licenses were accepted automatically. A supplemental
+cached-classpath JVM run passed 16 tests and intentionally skipped 3 after fixing
+JSON classpath ordering (Android's stub JSON class must not replace org.json).
+The cached JVM run is supplemental; fresh CI Gradle results are authoritative.
+
+CI RESULT: SUCCESS
+Fresh-source Gradle JUnit XML: 19 tests, 3 skipped, 0 failures, 0 errors;
+16 executed tests passed in 6.443 seconds on the CI runner.
+Web tests: 18 passed, 0 failed.
+Requested testDebugUnitTest --continue: BUILD SUCCESSFUL (2m 16s).
+Requested testDebugUnitTest assembleRelease --dry-run: BUILD SUCCESSFUL (11s).
+Actual assembleDebug + assembleRelease: BUILD SUCCESSFUL (3m 22s).
+APK apksigner verification: PASS.
+Signing certificate SHA-256:
+62ed38aa59c6206b06fbdb10400a99a444cedfa294881816f6848ebb9fbc6611
+CI XML/HTML reports downloaded locally to build/master-ci-reports/.
+
+OVERALL VERDICT
+Implemented device-free paths pass. This is NOT an all-scenarios production pass:
+automatic rerouting, measured 5 km coverage and native codec/device interoperability
+remain unsupported or unverified and are explicitly skipped. No application
+transport implementation was modified to make the tests pass.
+
+RELEASE SAFETY
+No public release/tag is replaced by verification. Signed APK output is retained
+as SR-Mesh-signed; test XML/HTML is retained as SR-Mesh-verification-reports.
+A dry-run only checks the task graph; actual APK assembly/signature verification
+is a separate required step, not inferred from dry-run success.
