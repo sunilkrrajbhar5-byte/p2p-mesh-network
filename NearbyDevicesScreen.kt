@@ -120,7 +120,7 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
             finally { withContext(NonCancellable + Dispatchers.IO) { temporary?.delete() }; sending = false }
         }
     }
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding(),
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().meshBackdrop().safeDrawingPadding().imePadding(),
         contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item("brand") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { MeshBrandHeader() } }
         item("identity") { MeshIdentityCard(identity) }
@@ -130,12 +130,12 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
                 Text("Nearby Devices / आस-पास के लोग", style = MaterialTheme.typography.titleLarge)
                 MeshRadarAnimation(active = resumed && networkGranted && connections.isEmpty())
                 Text("● Active: $identity (You)", color = MeshGreen)
-                Text(status, style = MaterialTheme.typography.bodySmall)
+                MeshScanStatus(status)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = engine::refresh, enabled = networkGranted) { Text("Search / खोजें") }
+                    FilledTonalButton(onClick = engine::refresh, enabled = networkGranted, colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color(0xFF173C50), contentColor = MeshCyan)) { Text("Search / खोजें") }
                     if (connections.isNotEmpty()) TextButton(onClick = engine::disconnect) { Text("Disconnect") }
                 }
-                if (nearby.isEmpty() && connections.isEmpty()) Text("No devices yet / अभी कोई डिवाइस नहीं मिला। Wi-Fi और Location चालू रखें।")
+                if (nearby.isEmpty() && connections.isEmpty()) MeshEmptyNearby()
             }
         }
         items(pending.filter { it.kind == PeerConsentController.Kind.CONNECTION }, key = { "request:${it.id}" }) { request ->

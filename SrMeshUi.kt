@@ -23,6 +23,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.shape.CircleShape
+import kotlin.math.cos
+import kotlin.math.sin
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
@@ -54,7 +58,7 @@ private val MeshBlue = Color(0xFF38BDF8)
 fun SrMeshTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = darkColorScheme(
         primary = MeshCyan, onPrimary = Color(0xFF06222C), secondary = MeshGreen,
-        background = Color(0xFF0B0F19), surface = Color(0xFF111C2C),
+        background = Color(0xFF0A0F1D), surface = Color(0xFF111C2C),
         surfaceVariant = Color(0xFF182638), onSurface = Color(0xFFE9F4FF),
         onSurfaceVariant = Color(0xFFABC1D5), outline = Color(0xFF36556A), error = Color(0xFFFFA0AB)),
         typography = Typography(
@@ -66,8 +70,12 @@ fun SrMeshTheme(content: @Composable () -> Unit) {
 
 @Composable
 internal fun MeshGlass(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
-        color = Color(0xD9111C2C), border = BorderStroke(1.dp, MeshCyan.copy(alpha = .22f))) {
+    val shape = RoundedCornerShape(24.dp)
+    Surface(modifier.fillMaxWidth().shadow(12.dp, shape, ambientColor = MeshCyan.copy(alpha=.12f),
+        spotColor = Color.Black).background(Brush.linearGradient(listOf(Color(0xED19283B), Color(0xE610192A))), shape),
+        shape = shape, color = Color.Transparent,
+        border = BorderStroke(1.dp, Brush.linearGradient(listOf(MeshCyan.copy(alpha=.36f),
+            Color.White.copy(alpha=.06f), MeshBlue.copy(alpha=.18f))))) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
     }
 }
@@ -82,7 +90,7 @@ internal fun MeshBrandHeader() {
             nodes.forEach { drawCircle(MeshCyan.copy(alpha=.12f), 7.dp.toPx(), it); drawCircle(MeshCyan, 3.dp.toPx(), it) }
             drawCircle(MeshBlue, 5.dp.toPx(), c)
         }
-        Text("SR MESH", style = MaterialTheme.typography.headlineMedium.copy(letterSpacing = 2.sp,
+        Text("SR MESH", color = Color(0xFFE4FCFF), style = MaterialTheme.typography.headlineMedium.copy(letterSpacing = 2.sp,
             shadow = Shadow(MeshCyan.copy(alpha = .45f), Offset.Zero, 16f)))
     }
     Text("YOUR MESH PROFILE • बिना इंटरनेट की आज़ादी", color = MeshCyan, style = MaterialTheme.typography.labelLarge)
@@ -130,9 +138,12 @@ internal fun MeshIdentityCard(identity: String) {
 @Composable
 private fun IdentityActions(identity: String, onCopy: () -> Unit, onShare: () -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SelectionContainer { Text(identity, style=MaterialTheme.typography.titleLarge, modifier=Modifier.padding(vertical=10.dp)) }
-        OutlinedButton(onClick=onCopy, contentPadding=PaddingValues(horizontal=12.dp)) { Text("Copy ID") }
-        OutlinedButton(onClick=onShare, contentPadding=PaddingValues(horizontal=12.dp)) { Text("Share / QR") }
+        Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            MeshMiniIcon("profile", MeshCyan, 44)
+            SelectionContainer { Text(identity, style=MaterialTheme.typography.titleLarge, modifier=Modifier.padding(vertical=10.dp)) }
+        }
+        OutlinedButton(onClick=onCopy, shape=CircleShape, border=BorderStroke(1.dp, MeshCyan.copy(alpha=.45f)), contentPadding=PaddingValues(horizontal=14.dp)) { Text("Copy ID") }
+        OutlinedButton(onClick=onShare, shape=CircleShape, border=BorderStroke(1.dp, MeshBlue.copy(alpha=.45f)), contentPadding=PaddingValues(horizontal=14.dp)) { Text("Share / QR") }
     }
 }
 
@@ -143,24 +154,40 @@ internal fun MeshRadarAnimation(active: Boolean) {
         val value by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(3600, easing=LinearEasing)), label="Radar sweep")
         value
     } else 0f
-    Canvas(Modifier.fillMaxWidth().height(148.dp).semantics {contentDescription=if(active) "Nearby discovery radar" else "Radar paused"}) {
-        val r=size.height*.43f
-        for(fraction in listOf(.35f,.65f,1f)) drawCircle(MeshCyan.copy(alpha=.16f),r*fraction,center,style=Stroke(1.dp.toPx()))
-        drawLine(MeshBlue.copy(alpha=.1f),Offset(center.x-r,center.y),Offset(center.x+r,center.y))
-        drawLine(MeshBlue.copy(alpha=.1f),Offset(center.x,center.y-r),Offset(center.x,center.y+r))
-        drawArc(MeshCyan.copy(alpha=.1f), phase*360f, 48f, true, Offset(center.x-r,center.y-r), Size(r*2,r*2))
-        drawCircle(MeshCyan.copy(alpha=(1-phase)*.3f),r*phase,center,style=Stroke(2.dp.toPx()))
-        drawCircle(MeshCyan,4.dp.toPx(),center)
+    Canvas(Modifier.fillMaxWidth().height(184.dp).semantics {contentDescription=if(active) "Nearby discovery radar; decorative scan markers" else "Radar paused"}) {
+        val r = size.minDimension * .46f
+        drawCircle(Brush.radialGradient(listOf(MeshCyan.copy(alpha=.12f), Color.Transparent), center, r), r)
+        for (i in 1..6) drawCircle(MeshCyan.copy(alpha=if(i%2==0) .22f else .09f), r*i/6, style=Stroke(1.dp.toPx()))
+        for (i in 0..7) {
+            val a = i * Math.PI / 4
+            drawLine(MeshBlue.copy(alpha=.10f), center, center+Offset(cos(a).toFloat()*r,sin(a).toFloat()*r))
+        }
+        if(active) {
+            // Layered sectors create a fading sweep without shaders or bitmap allocations.
+            for(i in 0..23) drawArc(MeshCyan.copy(alpha=.005f+i*.0012f), phase*360f-72+i*3, 3f, true,
+                center-Offset(r,r), Size(r*2,r*2))
+            val a=phase*2*Math.PI
+            drawLine(MeshCyan.copy(alpha=.7f), center, center+Offset(cos(a).toFloat()*r,sin(a).toFloat()*r), 1.dp.toPx())
+            // Scan accents are decorative, not a representation of discovered peers.
+            for(i in 0..2) {
+                val angle=a-i*1.3; val radius=r*(.35f+i*.23f)
+                val dot=center+Offset(cos(angle).toFloat()*radius,sin(angle).toFloat()*radius)
+                drawCircle(MeshCyan.copy(alpha=.1f), 7.dp.toPx(), dot)
+                drawCircle(MeshCyan.copy(alpha=.75f), 2.dp.toPx(), dot)
+            }
+        }
+        drawCircle(MeshCyan.copy(alpha=.14f), 11.dp.toPx())
+        drawCircle(MeshCyan, 4.dp.toPx())
     }
 }
 
 @Composable
-internal fun MeshContinueButton(enabled: Boolean, onClick: () -> Unit, label: String = "Continue / आगे बढ़ें ➔") {
-    val brush = Brush.horizontalGradient(listOf(MeshCyan, MeshBlue))
-    Button(onClick=onClick, enabled=enabled, modifier=Modifier.fillMaxWidth().heightIn(min=56.dp)
-        .clip(RoundedCornerShape(16.dp)).background(if(enabled) brush else Brush.horizontalGradient(listOf(Color(0xFF263544),Color(0xFF263544)))),
+internal fun MeshContinueButton(enabled: Boolean, onClick: () -> Unit, label: String = "Continue / आगे बढ़ें →") {
+    val brush = Brush.horizontalGradient(listOf(Color(0xFF81F7FF), MeshCyan, Color(0xFF2589FF)))
+    Button(onClick=onClick, enabled=enabled, modifier=Modifier.fillMaxWidth().heightIn(min=64.dp)
+        .shadow(if(enabled) 12.dp else 0.dp, RoundedCornerShape(20.dp), spotColor=MeshCyan.copy(alpha=.3f)).clip(RoundedCornerShape(20.dp)).border(1.dp, Color.White.copy(alpha=.3f), RoundedCornerShape(20.dp)).background(if(enabled) brush else Brush.horizontalGradient(listOf(Color(0xFF263544),Color(0xFF263544)))),
         colors=ButtonDefaults.buttonColors(containerColor=Color.Transparent,disabledContainerColor=Color.Transparent,contentColor=Color(0xFF06222C)),
-        contentPadding=PaddingValues(16.dp)) {Text(label, fontWeight=FontWeight.Bold, textAlign=TextAlign.Center)}
+        contentPadding=PaddingValues(16.dp)) {Text(label, fontSize=18.sp, fontWeight=FontWeight.ExtraBold, textAlign=TextAlign.Center)}
 }
 
 @Composable
@@ -206,17 +233,71 @@ internal fun MeshPermissionMatrix(enabled: Boolean = true, onNetworkState: (Bool
         PermissionSwitch("Notifications / सूचनाएँ",notifications,enabled) {
             if(Build.VERSION.SDK_INT>=33 && states[Manifest.permission.POST_NOTIFICATIONS]!=true) request.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS)) else settings()
         }
-        TextButton(onClick=::settings,enabled=enabled) {Text("Permission settings / सेटिंग्स")}
+        TextButton(onClick=::settings,enabled=enabled) { MeshMiniIcon("settings", MeshCyan, 28); Spacer(Modifier.width(10.dp)); Text("Permission settings / सेटिंग्स") }
     }
 }
 
 @Composable
 private fun PermissionSwitch(title: String, granted: Boolean, enabled: Boolean, onToggle: () -> Unit) {
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+        val (icon, tint) = when {
+            title.startsWith("Nearby") -> "radar" to MeshBlue
+            title.startsWith("Microphone") -> "mic" to Color(0xFFC49AFF)
+            title.startsWith("Camera") -> "camera" to Color(0xFFFFD36E)
+            else -> "bell" to Color(0xFFFFB454)
+        }
+        MeshMiniIcon(icon, tint)
         Column(Modifier.weight(1f)) {
             Text(title,style=MaterialTheme.typography.bodyMedium)
-            Text(if(granted) "✓ Granted / स्वीकृत" else "Not granted / अनुमति दें",color=if(granted) MeshGreen else MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall)
+            Text(if(granted) "✓ Granted / स्वीकृत" else "Not granted / अनुमति दें",color=if(granted) MeshGreen else MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall.copy(shadow=if(granted) Shadow(MeshGreen.copy(alpha=.35f), Offset.Zero, 8f) else null))
         }
-        Switch(checked=granted,onCheckedChange={onToggle()},enabled=enabled,modifier=Modifier.semantics {contentDescription=title})
+        Switch(checked=granted,onCheckedChange={onToggle()},enabled=enabled,colors=SwitchDefaults.colors(checkedThumbColor=Color(0xFFD8FFFF),checkedTrackColor=Color(0xFF149D9D),checkedBorderColor=MeshCyan,uncheckedTrackColor=Color(0xFF1B293A)),modifier=Modifier.semantics {contentDescription=title})
+    }
+}
+
+/** Shared paint-only decoration; radio and permission state remain owned by the screens. */
+internal fun Modifier.meshBackdrop(): Modifier = background(Brush.verticalGradient(
+    listOf(Color(0xFF0A0F1D), Color(0xFF0E1626))))
+
+@Composable
+internal fun MeshMiniIcon(kind: String, tint: Color, edge: Int = 36) {
+    Canvas(Modifier.size(edge.dp).background(tint.copy(alpha=.10f), if(kind=="profile") CircleShape else RoundedCornerShape(11.dp))
+        .border(1.dp,tint.copy(alpha=.22f),if(kind=="profile") CircleShape else RoundedCornerShape(11.dp)).padding(8.dp)) {
+        val w=size.width; val h=size.height; val stroke=Stroke(1.6.dp.toPx())
+        fun line(x:Float,y:Float,xx:Float,yy:Float) = drawLine(tint,Offset(w*x,h*y),Offset(w*xx,h*yy),1.6.dp.toPx(),StrokeCap.Round)
+        when(kind) {
+            "profile" -> {drawCircle(tint,w*.19f,Offset(w*.5f,h*.28f),style=stroke); drawArc(tint,180f,180f,false,Offset(w*.12f,h*.56f),Size(w*.76f,h*.65f),style=stroke)}
+            "mic" -> {drawRoundRect(tint,Offset(w*.34f,h*.06f),Size(w*.32f,h*.55f),androidx.compose.ui.geometry.CornerRadius(w*.16f),style=stroke);drawArc(tint,0f,180f,false,Offset(w*.16f,h*.28f),Size(w*.68f,h*.48f),style=stroke);line(.5f,.76f,.5f,.94f);line(.3f,.94f,.7f,.94f)}
+            "camera" -> {drawRoundRect(tint,Offset(w*.06f,h*.23f),Size(w*.88f,h*.62f),androidx.compose.ui.geometry.CornerRadius(w*.1f),style=stroke);drawCircle(tint,w*.18f,center,style=stroke);line(.3f,.12f,.7f,.12f)}
+            "bell" -> {drawArc(tint,180f,180f,false,Offset(w*.2f,h*.12f),Size(w*.6f,h*.6f),style=stroke);line(.2f,.42f,.13f,.78f);line(.8f,.42f,.87f,.78f);line(.13f,.78f,.87f,.78f);drawCircle(tint,w*.08f,Offset(w*.5f,h*.94f))}
+            "pin" -> {drawCircle(tint,w*.29f,Offset(w*.5f,h*.33f),style=stroke);line(.25f,.5f,.5f,.94f);line(.75f,.5f,.5f,.94f);drawCircle(tint,w*.07f,Offset(w*.5f,h*.33f))}
+            "wifi" -> {for(i in 1..3) drawArc(tint,220f,100f,false,Offset(w*(.5f-i*.17f),h*(.88f-i*.23f)),Size(w*i*.34f,h*i*.4f),style=stroke);drawCircle(tint,w*.07f,Offset(w*.5f,h*.9f))}
+            "warning" -> {val path=Path().apply {moveTo(w*.5f,h*.05f);lineTo(w*.95f,h*.9f);lineTo(w*.05f,h*.9f);close()};drawPath(path,tint,style=stroke);line(.5f,.35f,.5f,.57f);drawCircle(tint,w*.04f,Offset(w*.5f,h*.74f))}
+            "settings" -> {drawCircle(tint,w*.28f,style=stroke);drawCircle(tint,w*.09f,style=stroke);for(i in 0..7) {val a=i*Math.PI/4;drawLine(tint,center+Offset(cos(a).toFloat()*w*.3f,sin(a).toFloat()*h*.3f),center+Offset(cos(a).toFloat()*w*.44f,sin(a).toFloat()*h*.44f),2.dp.toPx())}}
+            else -> {drawCircle(tint,w*.4f,style=stroke);drawCircle(tint,w*.2f,style=stroke);line(.5f,.5f,.82f,.18f)}
+        }
+    }
+}
+
+@Composable
+internal fun MeshScanStatus(status: String) {
+    val warning=status.contains("failed",ignoreCase=true) || status.contains("error",ignoreCase=true)
+    val tint=if(warning) Color(0xFFFFC16E) else MeshCyan
+    Row(Modifier.fillMaxWidth().background(tint.copy(alpha=.07f),RoundedCornerShape(12.dp)).padding(10.dp),
+        verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        MeshMiniIcon(if(warning) "warning" else "radar",tint,30)
+        Text(status,color=tint,style=MaterialTheme.typography.bodySmall,modifier=Modifier.weight(1f))
+    }
+}
+
+@Composable
+internal fun MeshEmptyNearby() {
+    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+            Text("No devices yet / अभी कोई डिवाइस नहीं मिला",style=MaterialTheme.typography.bodyMedium)
+            Text("Wi-Fi और Location चालू रखें",color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall)
+        }
+        MeshMiniIcon("wifi",MeshCyan,30)
+        MeshMiniIcon("pin",Color(0xFFB79AFF),30)
     }
 }

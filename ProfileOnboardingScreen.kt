@@ -44,7 +44,7 @@ fun ProfileOnboardingScreen(
     var canNetwork by remember { mutableStateOf(false) }
     val cleanName = nickname.trim()
 
-    Column(modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState())
+    Column(modifier.fillMaxSize().meshBackdrop().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState())
         .padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         MeshBrandHeader()
         if (identity == null) {
@@ -79,7 +79,7 @@ fun ProfileOnboardingScreen(
                 finally { busy = false }
             }
         }, enabled = identity != null && canNetwork && !busy,
-            label = if (busy) "Please wait / कृपया प्रतीक्षा करें…" else "Continue / आगे बढ़ें ➔")
+            label = if (busy) "Please wait / कृपया प्रतीक्षा करें…" else "Continue / आगे बढ़ें →")
         remoteControls?.invoke()
         MeshVersionTag()
     }
