@@ -116,5 +116,13 @@ tasks.matching { it.name.startsWith("compile") && it.name.contains("UnitTest") }
 }
 tasks.withType<Test>().configureEach {
     maxHeapSize = "1536m"
+    // Android's mockable android.jar also contains org.json stub classes.
+    // Put the explicit JVM implementation first, including on Windows runners.
+    doFirst {
+        val jsonRuntime = classpath.filter { it.name.startsWith("json-") && it.extension == "jar" }
+        check(jsonRuntime.files.size == 1) { "Expected one JVM org.json runtime dependency" }
+        classpath = files(jsonRuntime, classpath)
+        logger.lifecycle("JVM JSON runtime first: ${jsonRuntime.singleFile.name}")
+    }
     testLogging { events("passed", "skipped", "failed"); showStandardStreams = true }
 }
