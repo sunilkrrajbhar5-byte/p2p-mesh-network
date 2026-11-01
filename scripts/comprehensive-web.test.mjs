@@ -38,7 +38,7 @@ test('HTTP portal and About return 200 and all internal links resolve',async()=>
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  try{
   const base=`http://127.0.0.1:${server.address().port}/`;
-  for(const file of ['index.html','about.html']){
+  for(const file of ['index.html','desktop.html','about.html']){
    const response=await fetch(base+file);assert.equal(response.status,200);const html=await response.text();assert.match(html,/<!doctype html>/i);assert.match(html,/charset="UTF-8"/i);
    const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);assert.equal(ids.length,new Set(ids).size);
    for(const [,href] of html.matchAll(/<a\b[^>]*href="([^"]+)"/g)){
