@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script id="viewport-routing">
 (() => {
+  if (window.matchMedia?.('(display-mode: standalone)').matches || window.navigator?.standalone === true) {
+    window.location.replace('gateway.html' + window.location.search);
+    return;
+  }
   const params = new URLSearchParams(window.location.search);
   if (window.innerWidth < 768 && params.get('force') !== 'desktop') {
     window.location.replace('index.html' + window.location.search + window.location.hash);
@@ -41,7 +45,7 @@
 <div class="radar-card glass"><div class="radar-top"><span>P2P DISCOVERY AIRSPACE</span><span>INTERACTIVE DEMO</span></div><div class="radar-stage"><div class="radar-disc" id="radar"><div class="beam" aria-hidden="true"></div><svg class="radar-lines" viewBox="0 0 100 100" aria-hidden="true"><path d="m20 36 27-15 34 23-17 32-30-2L20 36l30 14 31-6M47 21l3 29 14 26M34 74l16-24"/></svg><span class="origin"></span><button class="peer" style="left:20%;top:36%" aria-label="Preview peer Amit" data-peer="Amit#12345"></button><button class="peer" style="left:47%;top:21%;--delay:.3s" aria-label="Preview peer Vikas" data-peer="Vikas#9876"></button><button class="peer" style="left:81%;top:44%;--delay:.8s" aria-label="Preview peer Asha" data-peer="Asha#65210"></button><button class="peer" style="left:64%;top:76%;--delay:1s" aria-label="Preview peer Ravi" data-peer="Ravi#21890"></button><button class="peer" style="left:34%;top:74%;--delay:1.3s" aria-label="Preview peer Neha" data-peer="Neha#56324"></button></div></div><p class="radar-caption" id="peer-caption" aria-live="polite">Select a glowing peer to explore the demo.</p><div class="radar-metrics"><a href="about.html#coverage">📡 Up to 5 km mesh target*</a><span>Local P2P • No mobile data</span><span>Simulated nodes • Not a live scan</span></div><button class="motion" id="motion" type="button" aria-pressed="false">Pause radar animation</button></div></section>
 <section id="downloads" aria-labelledby="downloads-title"><div class="download-title"><h2 id="downloads-title">ONE MESH. EVERY SCREEN.</h2><span>CHOOSE YOUR WAY TO CONNECT</span></div><div class="platforms">
 <article class="platform glass"><svg aria-hidden="true"><use href="#android"/></svg><h3>Android APK</h3><p>The native SR Mesh experience.</p><a id="android-download" href="https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/releases/latest/download/SR-Mesh.apk">Download Android (.apk) • <span data-version>v1.0.3</span></a><small>Official GitHub release • SR-Mesh.apk</small></article>
-<article class="platform glass"><svg aria-hidden="true"><use href="#windows"/></svg><h3>Windows Desktop</h3><p>Install the offline-ready desktop web app.</p><button id="install-app" class="install-primary" type="button" aria-describedby="install-status">Install Web App on PC</button><small id="install-status" role="status" aria-live="polite">Chrome / Edge • No EXE download required</small></article>
+<article class="platform glass"><svg aria-hidden="true"><use href="#windows"/></svg><h3>Windows Desktop</h3><p>Install the offline-ready desktop web app.</p><button id="install-app" class="install-primary" type="button" aria-describedby="install-status">Install Web App on PC</button><small id="install-status" role="status" aria-live="polite">Chrome / Edge • No EXE download required</small><a href="gateway.html">Open Service Dashboard (Chat &amp; File Transfer)</a></article>
 <article class="platform glass"><svg aria-hidden="true"><use href="#apple"/></svg><h3>macOS App</h3><p>Connect from your Mac browser.</p><a href="#gateway" data-gateway>Open macOS Web Client</a><small>Browser access • .dmg not published</small></article>
 <article class="platform glass"><svg aria-hidden="true"><use href="#globe"/></svg><h3>Web Gateway</h3><p>Join your nearby Android host.</p><a href="#gateway" data-gateway>Open Web Client • No Install Required</a><small>Trusted local HTTPS gateway required</small></article>
 </div></section>
@@ -60,21 +64,22 @@
 (() => {
   'use strict';
   // PWA install controller: the browser owns eligibility and final confirmation.
-  let installEvent=null,installed=window.matchMedia('(display-mode: standalone)').matches;
+  let installEvent=null,installed=window.matchMedia('(display-mode: standalone)').matches || window.navigator?.standalone === true;
+  try{installed=installed || localStorage.getItem('srMeshInstalled')==='true';}catch{}
   const installButton=document.getElementById('install-app'), installStatus=document.getElementById('install-status');
-  function showInstalled(){installed=true;installEvent=null;installButton.disabled=true;installStatus.textContent='App installed — open SR Mesh from your apps';}
+  function showInstalled(){installed=true;installEvent=null;installButton.disabled=false;installButton.textContent='Open Service Dashboard (Chat & File Transfer)';installStatus.textContent='Open nearby peers, chats and file transfers';try{localStorage.setItem('srMeshInstalled','true');}catch{}}
   if(installed)showInstalled();
   if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{if(!installed)installStatus.textContent='Offline setup failed. Reconnect and reload this page to try again.';});
   window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();if(installed)return;installEvent=event;installButton.disabled=false;installStatus.textContent='Ready to install • no EXE download required';});
   window.addEventListener('appinstalled',showInstalled);
   installButton.addEventListener('click',async()=>{
-    if(installed)return;
+    if(installed){window.location.assign('gateway.html');return;}
     if(!installEvent){installStatus.textContent='In Chrome/Edge, use the address-bar Install icon or browser menu → Install this site as an app. If unavailable, open this page in a supported browser outside private mode.';return;}
     const prompt=installEvent;installEvent=null;installButton.disabled=true;
     try{await prompt.prompt();const choice=await prompt.userChoice;
       if(!installed)installStatus.textContent=choice.outcome==='accepted'?'Installation requested — finish the browser confirmation':'Installation cancelled. You can try again from the browser menu.';
     }catch{if(!installed)installStatus.textContent='Install prompt unavailable. Use the Chrome/Edge browser menu to install.';}
-    finally{installButton.disabled=installed;}
+    finally{installButton.disabled=false;}
   });
   // End PWA install controller.
 
@@ -100,7 +105,7 @@
   dialog.addEventListener('close',stopCamera);
   dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom)dialog.close();}});
   function gatewayOrigin(value){const url=new URL(value.trim());if(url.protocol!=='https:' || url.username || url.password || url.search || url.hash || url.pathname!=='/')throw Error('Use a trusted HTTPS gateway origin, e.g. https://192.168.1.1:8443/');return url.origin+'/';}
-  function connect(value){stopCamera();try{const target=gatewayOrigin(value);input.value=target;stopCamera();window.location.assign(target);}catch(e){error.textContent=e.message;$('manual-override').open=true;input.focus();}}
+  function connect(value){stopCamera();try{const target=gatewayOrigin(value);input.value=target;stopCamera();try{localStorage.setItem('srMeshGateway',target);}catch{}window.location.assign(target);}catch(e){error.textContent=e.message;$('manual-override').open=true;input.focus();}}
   $('gateway-form').addEventListener('submit',event=>{event.preventDefault();connect(input.value);});
   $('paste').addEventListener('click',async()=>{try{input.value=await navigator.clipboard.readText();connect(input.value);}catch{error.textContent='Clipboard access unavailable. Paste the gateway link into the field.';$('manual-override').open=true;input.focus();}});
   $('scan').addEventListener('click',async()=>{

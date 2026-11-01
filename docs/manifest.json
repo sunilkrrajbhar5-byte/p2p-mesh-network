@@ -2,12 +2,12 @@
   "id": "./desktop.html",
   "name": "SR Mesh Desktop",
   "short_name": "SR Mesh",
-  "start_url": "./desktop.html?force=desktop&pwa=1",
+  "start_url": "gateway.html",
   "scope": "./",
   "display": "standalone",
   "theme_color": "#00F2FE",
   "background_color": "#07090E",
-  "description": "Offline desktop portal for nearby SR Mesh gateways",
+  "description": "SR Mesh service dashboard for local peer chat and file transfer",
   "icons": [
     {
       "src": "desktop-icon-192.png",
