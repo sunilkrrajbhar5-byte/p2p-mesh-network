@@ -1,51 +1,80 @@
 {
- "name": "sr-mesh-desktop",
- "version": "1.0.2",
- "description": "Native SR Mesh gateway workspace",
- "author": "SR Systems",
- "license": "GPL-2.0-or-later",
- "main": "main.js",
- "scripts": {
-  "start": "electron .",
-  "test": "node --test test/*.test.js",
-  "dist": "electron-builder --win portable --x64 --publish never"
- },
- "devDependencies": {
-  "electron": "45.2.1",
-  "electron-builder": "26.18.0"
- },
- "dependencies": {
-  "bonjour-service": "1.4.4",
-  "ws": "8.22.1"
- },
- "build": {
-  "appId": "com.srsystems.srmesh.workspace",
-  "productName": "SR Mesh Workspace",
-  "asar": true,
-  "compression": "maximum",
-  "directories": {
-   "output": "../docs/downloads"
+  "name": "sr-mesh-desktop",
+  "version": "1.0.3",
+  "description": "Native SR Mesh gateway workspace",
+  "author": "SR Systems",
+  "license": "GPL-2.0-or-later",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "dist": "npm run build",
+    "build": "electron-builder --win nsis portable --x64 --publish never"
   },
-  "files": [
-   "main.js",
-   "preload.js",
-   "transport.js",
-   "discovery.js",
-   "icon.png",
-   "LICENSE.txt"
-  ],
-  "extraResources": [
-   {
-    "from": "../docs/gateway.html",
-    "to": "gateway.html"
-   }
-  ],
-  "win": {
-   "icon": "icon.png",
-   "signAndEditExecutable": false
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0",
+    "resedit": "1.7.2"
   },
-  "portable": {
-   "artifactName": "SR-Mesh-Windows-Portable-v${version}.${ext}"
+  "dependencies": {
+    "bonjour-service": "1.4.4",
+    "ws": "8.22.1"
+  },
+  "build": {
+    "appId": "com.srsystems.srmesh.workspace",
+    "productName": "SR MESH Desktop",
+    "asar": true,
+    "compression": "maximum",
+    "directories": {
+      "output": "../docs/downloads"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "transport.js",
+      "discovery.js",
+      "LICENSE.txt",
+      "assets/icon.ico"
+    ],
+    "extraResources": [
+      {
+        "from": "../docs/gateway.html",
+        "to": "gateway.html"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": true,
+      "signExecutable": false
+    },
+    "portable": {
+      "artifactName": "SR-Mesh-Windows-Portable-v${version}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "SR-Mesh-Windows-Setup-v${version}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SR MESH Desktop"
+    }
   }
- }
 }

@@ -20,21 +20,24 @@ jobs:
       - run: npm test --prefix desktop-client
       - run: node --test scripts/gateway-workspace.test.mjs
       - run: npm run dist --prefix desktop-client
+      - name: Verify embedded application, portable and installer icons
+        run: node desktop-client/scripts/verify-icons.cjs "docs/downloads/win-unpacked/SR MESH Desktop.exe" docs/downloads/SR-Mesh-Windows-Portable-v1.0.3.exe docs/downloads/SR-Mesh-Windows-Setup-v1.0.3.exe
       - name: Verify native preload and packaged dashboard
         shell: pwsh
         run: |
           $env:SR_MESH_SMOKE_TEST='1'
-          $client = Start-Process -FilePath 'docs/downloads/win-unpacked/SR Mesh Workspace.exe' -WindowStyle Hidden -PassThru
+          $client = Start-Process -FilePath 'docs/downloads/win-unpacked/SR MESH Desktop.exe' -WindowStyle Hidden -PassThru
           if (-not $client.WaitForExit(30000)) { Stop-Process -Id $client.Id; throw 'Workspace startup timed out' }
           if ($client.ExitCode -ne 0) { throw 'Native dashboard/preload smoke check failed' }
-          $exe = Get-Item docs/downloads/SR-Mesh-Windows-Portable-v1.0.2.exe
-          "{0}  {1}" -f (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower(), $exe.Name | Set-Content docs/downloads/SR-Mesh-Native-v1.0.2.sha256 -Encoding ascii
+          $executables = Get-Item docs/downloads/SR-Mesh-Windows-Portable-v1.0.3.exe, docs/downloads/SR-Mesh-Windows-Setup-v1.0.3.exe
+          $executables | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } | Set-Content docs/downloads/SR-Mesh-Native-v1.0.3.sha256 -Encoding ascii
       - uses: actions/upload-artifact@v4
         with:
           name: SR-Mesh-Native-Portable
           path: |
-            docs/downloads/SR-Mesh-Windows-Portable-v1.0.2.exe
-            docs/downloads/SR-Mesh-Native-v1.0.2.sha256
+            docs/downloads/SR-Mesh-Windows-Portable-v1.0.3.exe
+            docs/downloads/SR-Mesh-Windows-Setup-v1.0.3.exe
+            docs/downloads/SR-Mesh-Native-v1.0.3.sha256
           if-no-files-found: error
       - name: Publish executable
         if: startsWith(github.ref, 'refs/tags/desktop-client-v')
@@ -43,5 +46,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         shell: pwsh
         run: |
-          gh release create $env:GITHUB_REF_NAME docs/downloads/SR-Mesh-Windows-Portable-v1.0.2.exe docs/downloads/SR-Mesh-Native-v1.0.2.sha256 --verify-tag --latest=false --title 'SR Mesh Native Workspace v1.0.2' --notes 'Portable Windows x64 executable with bundled gateway dashboard and native LAN HTTP/WebSocket transport. Gateway access key required. HTTP is unencrypted; HTTPS certificate verification remains enabled. Unsigned binary; SHA-256 checksum included.'
+          gh release create $env:GITHUB_REF_NAME docs/downloads/SR-Mesh-Windows-Portable-v1.0.3.exe docs/downloads/SR-Mesh-Windows-Setup-v1.0.3.exe docs/downloads/SR-Mesh-Native-v1.0.3.sha256 --verify-tag --latest=false --title 'SR Mesh Native Workspace v1.0.3' --notes 'Portable Windows x64 executable with bundled gateway dashboard and native LAN HTTP/WebSocket transport. Gateway access key required. HTTP is unencrypted; HTTPS certificate verification remains enabled. Unsigned binary; SHA-256 checksum included.'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

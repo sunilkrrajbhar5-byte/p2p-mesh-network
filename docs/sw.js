@@ -1,5 +1,5 @@
 /* Desktop-only caching. Mobile index/root requests and gateway traffic are never intercepted. */
-const CACHE='sr-mesh-desktop-pwa-v5';
+const CACHE='sr-mesh-desktop-pwa-v6';
 const assets=['gateway.html','desktop.html','manifest.json','desktop-icon-192.png','desktop-icon-512.png'];
 const urls=assets.map(file=>new URL(file,self.registration.scope).href);
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(urls)).then(()=>self.skipWaiting())));
