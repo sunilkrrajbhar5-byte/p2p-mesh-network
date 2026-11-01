@@ -27,7 +27,7 @@ data class RemoteConfig(
         .put("webClientUrl", webClientUrl).put("forceUpdate", forceUpdate).put("releaseNotes", releaseNotes).toString(2)
     companion object {
         const val SOURCE = "https://raw.githubusercontent.com/sunilkrrajbhar5-byte/p2p-mesh-network/main/config.json"
-        val DEFAULT = RemoteConfig(3, "1.0.2",
+        val DEFAULT = RemoteConfig(4, "1.0.3",
             "https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/releases/latest/download/SR-Mesh.apk",
             "https://sunilkrrajbhar5-byte.github.io/p2p-mesh-network/", false, "Initial universal P2P mesh release")
         fun parse(text: String): RemoteConfig {

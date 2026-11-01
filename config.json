@@ -1,8 +1,8 @@
 {
-  "latestVersionCode": 3,
-  "latestVersionName": "1.0.2",
+  "latestVersionCode": 4,
+  "latestVersionName": "1.0.3",
   "apkDownloadUrl": "https://github.com/sunilkrrajbhar5-byte/p2p-mesh-network/releases/latest/download/SR-Mesh.apk",
   "webClientUrl": "https://sunilkrrajbhar5-byte.github.io/p2p-mesh-network/",
   "forceUpdate": false,
-  "releaseNotes": "Enhanced cyber-mesh onboarding: glass cards, profile avatar, layered animated radar, colorful permission controls, and gradient actions. Existing discovery and connection behavior preserved."
+  "releaseNotes": "User-friendly bilingual hotspot conflict dialog, Wi-Fi and Location settings prompts, and one-time discovery retry after returning from Settings. Includes premium dashboard updates and verified local build fixes. Uses the same release signing identity as the current v1.0.2 APK."
 }
