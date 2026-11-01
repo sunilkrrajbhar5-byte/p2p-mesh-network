@@ -27,7 +27,7 @@ import java.io.File
 @Composable
 fun IncomingConnectionDialog(controller: PeerConsentController) {
     val pending by controller.pending.collectAsStateWithLifecycle()
-    val request = pending.firstOrNull { it.kind != PeerConsentController.Kind.CONNECTION } ?: return
+    val request = pending.firstOrNull() ?: return
     key(request.id) {
         AlertDialog(
             onDismissRequest = { controller.decide(request.id, false) },
@@ -82,9 +82,6 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
         if (selected !in connections.map { it.peerId }) selected = connections.firstOrNull()?.peerId
         if (resumed && connections.isNotEmpty()) engine.createVoice(owner)
     }
-    LaunchedEffect(pending.firstOrNull { it.kind == PeerConsentController.Kind.CONNECTION }?.id) {
-        if (pending.any { it.kind == PeerConsentController.Kind.CONNECTION }) listState.animateScrollToItem(4)
-    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val peer = selected
         if (uri != null && peer != null) scope.launch {
@@ -120,23 +117,43 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
             finally { withContext(NonCancellable + Dispatchers.IO) { temporary?.delete() }; sending = false }
         }
     }
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().meshBackdrop().safeDrawingPadding().imePadding(),
-        contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item("brand") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { MeshBrandHeader() } }
-        item("identity") { MeshIdentityCard(identity) }
-        item("gateway") { ActiveGatewayCard(identity) }
-        item("radar") {
-            MeshGlass {
-                Text("Nearby Devices / आस-पास के लोग", style = MaterialTheme.typography.titleLarge)
-                MeshRadarAnimation(active = resumed && networkGranted && connections.isEmpty())
-                Text("● Active: $identity (You)", color = MeshGreen)
-                MeshScanStatus(status)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(onClick = engine::refresh, enabled = networkGranted, colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color(0xFF173C50), contentColor = MeshCyan)) { Text("Search / खोजें") }
-                    if (connections.isNotEmpty()) TextButton(onClick = engine::disconnect) { Text("Disconnect") }
-                }
-                if (nearby.isEmpty() && connections.isEmpty()) MeshEmptyNearby()
+    val homeState = HomeUiState(
+        myIdentity = identity,
+        peersList = connections.map { HomePeerUi(it.peerId, it.peerId, connected = true) } +
+            nearby.filter { peer -> connections.none { it.peerId == peer.identity } }
+                .map { HomePeerUi(it.address, it.identity) },
+        isScanning = resumed && networkGranted && connections.isEmpty() &&
+            (status == "Visible to nearby devices" || status == "Searching nearby devices"),
+        connectionStatus = status,
+        canConnect = networkGranted && connections.isEmpty(),
+        engineReady = resumed && networkGranted && (connections.isNotEmpty() || status == "Visible to nearby devices" || status == "Searching nearby devices"),
+    )
+    fun openChat() {
+        if (selected != null) showComposer = true
+        else engine.notify("Select a nearby device / पास का डिवाइस चुनें")
+    }
+    HomeScreen(state = homeState, listState = listState,
+        onSearch = engine::refresh,
+        onConnect = { id ->
+            val connection = connections.firstOrNull { it.peerId == id }
+            if (connection != null) { selected = connection.peerId; showComposer = true }
+            else nearby.firstOrNull { it.address == id }?.let(engine::connect)
+        },
+        onChat = ::openChat,
+        onFileDrop = {
+            if (selected != null && !sending) picker.launch(arrayOf("*/*"))
+            else engine.notify(if(sending) "File transfer is already running" else "Select a connected peer first")
+        },
+        settingsContent = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                MeshPermissionMatrix(onNetworkState = { networkGranted = it })
+                remoteControls()
+                MeshVersionTag()
             }
+        }) {
+        item("gateway") { ActiveGatewayCard(identity) }
+        if (connections.isNotEmpty()) item("disconnect") {
+            TextButton(onClick = engine::disconnect) { Text("Disconnect / कनेक्शन बंद करें") }
         }
         items(pending.filter { it.kind == PeerConsentController.Kind.CONNECTION }, key = { "request:${it.id}" }) { request ->
             MeshGlass {
@@ -147,22 +164,6 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
                     onReject = { engine.consent.decide(request.id, false) })
             }
         }
-        items(connections, key = { "connected:${it.sessionId}" }) { connection ->
-            Card(onClick = { selected = connection.peerId; showComposer = true }, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(18.dp)) { Text(connection.peerId, style = MaterialTheme.typography.titleMedium); Text(if(selected == connection.peerId) "✓ Selected · Connected / जुड़े हैं" else "Connected / जुड़े हैं", color = MeshGreen) }
-            }
-        }
-        items(nearby.filter { peer -> connections.none { it.peerId == peer.identity } }, key = { "nearby:${it.address}" }) { peer ->
-            Card(onClick = { engine.connect(peer) }, enabled = networkGranted && connections.isEmpty(), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(18.dp)) { Text(peer.identity, style = MaterialTheme.typography.titleMedium); Text("Tap to connect / जुड़ने के लिए टैप करें", color = MeshCyan) }
-            }
-        }
-        item("permissions") { MeshPermissionMatrix(onNetworkState = { networkGranted = it }) }
-        item("continue") { MeshContinueButton(enabled = networkGranted, onClick = {
-            if (selected != null) { showComposer = true; scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 3).coerceAtLeast(0)) } }
-            else { engine.refresh(); engine.notify("Select a nearby device / पास का डिवाइस चुनें") }
-        }) }
-        item("controls") { remoteControls() }
         items(chat) { Text(it) }
         item("composer") {
         if (showComposer) selected?.let { peer ->

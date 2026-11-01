@@ -266,6 +266,10 @@ internal fun MeshMiniIcon(kind: String, tint: Color, edge: Int = 36) {
         val w=size.width; val h=size.height; val stroke=Stroke(1.6.dp.toPx())
         fun line(x:Float,y:Float,xx:Float,yy:Float) = drawLine(tint,Offset(w*x,h*y),Offset(w*xx,h*yy),1.6.dp.toPx(),StrokeCap.Round)
         when(kind) {
+            "qr" -> {for(point in listOf(Offset(0f,0f),Offset(w*.6f,0f),Offset(0f,h*.6f))) drawRect(tint,point,Size(w*.36f,h*.36f),style=stroke);drawRect(tint,Offset(w*.6f,h*.6f),Size(w*.16f,h*.16f));drawRect(tint,Offset(w*.83f,h*.83f),Size(w*.16f,h*.16f))}
+            "bolt" -> {val path=Path().apply {moveTo(w*.6f,0f);lineTo(w*.15f,h*.55f);lineTo(w*.48f,h*.55f);lineTo(w*.38f,h);lineTo(w*.87f,h*.4f);lineTo(w*.55f,h*.4f);close()};drawPath(path,tint,style=stroke)}
+            "chat" -> {drawRoundRect(tint,Offset(w*.08f,h*.1f),Size(w*.84f,h*.65f),androidx.compose.ui.geometry.CornerRadius(w*.12f),style=stroke);line(.2f,.75f,.2f,.95f);line(.2f,.95f,.43f,.75f);line(.27f,.34f,.73f,.34f);line(.27f,.52f,.6f,.52f)}
+            "broadcast" -> {val path=Path().apply {moveTo(w*.1f,h*.35f);lineTo(w*.75f,h*.1f);lineTo(w*.75f,h*.75f);lineTo(w*.1f,h*.55f);close()};drawPath(path,tint,style=stroke);line(.25f,.6f,.32f,.95f);line(.9f,.3f,1f,.2f);line(.9f,.6f,1f,.7f)}
             "profile" -> {drawCircle(tint,w*.19f,Offset(w*.5f,h*.28f),style=stroke); drawArc(tint,180f,180f,false,Offset(w*.12f,h*.56f),Size(w*.76f,h*.65f),style=stroke)}
             "mic" -> {drawRoundRect(tint,Offset(w*.34f,h*.06f),Size(w*.32f,h*.55f),androidx.compose.ui.geometry.CornerRadius(w*.16f),style=stroke);drawArc(tint,0f,180f,false,Offset(w*.16f,h*.28f),Size(w*.68f,h*.48f),style=stroke);line(.5f,.76f,.5f,.94f);line(.3f,.94f,.7f,.94f)}
             "camera" -> {drawRoundRect(tint,Offset(w*.06f,h*.23f),Size(w*.88f,h*.62f),androidx.compose.ui.geometry.CornerRadius(w*.1f),style=stroke);drawCircle(tint,w*.18f,center,style=stroke);line(.3f,.12f,.7f,.12f)}

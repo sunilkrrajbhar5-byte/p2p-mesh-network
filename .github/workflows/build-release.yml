@@ -59,7 +59,12 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: bash ./gradlew --no-daemon :app:assembleRelease
+        run: |
+          if [ "${{ inputs.verify_only }}" = "true" ]; then
+            bash ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:assembleRelease
+          else
+            bash ./gradlew --no-daemon :app:assembleRelease
+          fi
       - name: Verify signed release APK
         run: |
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/SR-Mesh.apk"
