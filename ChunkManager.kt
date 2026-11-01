@@ -47,7 +47,9 @@ class ChunkManager(
     private val maxFileBytes: Long = 8L * 1024 * 1024 * 1024,
     private val maxReservedBytes: Long = 8L * 1024 * 1024 * 1024,
     private val acceptTransfer: (Metadata) -> Boolean = { true },
-    private val now: () -> Long = { System.nanoTime() / 1_000_000 }
+    private val now: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val onReceiveProgress: (Metadata, String, Long) -> Unit = { _, _, _ -> },
+    private val onReceiveFailure: (Metadata) -> Unit = {}
 ) {
     class Metadata(val id: UUID, val size: Long, val fileName: String, sha256: ByteArray) {
         private val digest = sha256.copyOf()
@@ -59,11 +61,12 @@ class ChunkManager(
             require(Charsets.UTF_8.newEncoder().canEncode(fileName))
         }
     }
-    data class Completed(val metadata: Metadata, val file: File)
+    data class Completed(val metadata: Metadata, val file: File, val sender: String = "")
     private class Incoming(val metadata: Metadata, val sender: String, val cluster: UUID,
         val file: File, val handle: RandomAccessFile, var touched: Long) {
         val fragments = BitSet()
         var received = 0
+        var receivedBytes = 0L
         var verifying = false
         var complete = false
         var verification: Job? = null
@@ -84,7 +87,7 @@ class ChunkManager(
                 delay(15_000)
                 receiveLock.withLock {
                     val expired = incoming.values.filter { !it.complete && !it.verifying && now() - it.touched >= RECEIVE_TIMEOUT_MS }
-                    expired.forEach { discard(it) }
+                    expired.forEach { runCatching { onReceiveFailure(it.metadata) }; discard(it) }
                 }
             }
         }
@@ -222,10 +225,13 @@ class ChunkManager(
                             if (transfer.handle.channel.write(bytes) <= 0) throw IOException("Incomplete cache write")
                         }
                         transfer.fragments.set(bit); transfer.received++
+                        transfer.receivedBytes += expected
+                        // Presentation callbacks cannot corrupt an otherwise valid transfer.
+                        runCatching { onReceiveProgress(transfer.metadata, transfer.sender, transfer.receivedBytes) }
                     }
                     transfer.touched = now()
                     if (transfer.received.toLong() == fragmentCount(transfer.metadata.size)) verifyLater(transfer)
-                } catch (e: Exception) { discard(transfer); rejected = true }
+                } catch (e: Exception) { runCatching { onReceiveFailure(transfer.metadata) }; discard(transfer); rejected = true }
             }
         }
         if (rejected) acknowledgements.reply(fragment.id, AckManager.Code.REJECTED)
@@ -253,13 +259,14 @@ class ChunkManager(
                     transfer.handle.close()
                     transfer.complete = true
                     mutableCompleted.value = mutableCompleted.value +
-                        (transfer.metadata.id to Completed(transfer.metadata, transfer.file))
+                        (transfer.metadata.id to Completed(transfer.metadata, transfer.file, transfer.sender))
                     verified = true
                 }
                 acknowledgements.reply(transfer.metadata.id, AckManager.Code.VERIFIED)
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) {
                 if (!verified) {
+                    runCatching { onReceiveFailure(transfer.metadata) }
                     receiveLock.withLock { discard(transfer) }
                     runCatching { acknowledgements.reply(transfer.metadata.id, AckManager.Code.REJECTED) }
                 } // ACK failure does not undo a verified cache file or invent a sender tick.

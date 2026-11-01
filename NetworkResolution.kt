@@ -22,6 +22,7 @@ enum class NetworkResolution(val title: String, val description: String, val sta
 }
 
 class NetworkResolutionException(val resolution: NetworkResolution) : IOException(resolution.status)
+class WifiBusyException : IOException("Auto-reconnection active (Wi-Fi busy) / Wi-Fi व्यस्त है")
 
 /** Arm only after opening Settings; ignore initial/resumed recompositions. */
 class NetworkSettingsRetry {

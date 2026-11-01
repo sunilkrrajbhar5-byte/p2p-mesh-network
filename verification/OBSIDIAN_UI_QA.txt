@@ -1,0 +1,30 @@
+SR Mesh Obsidian UI / endpoint Downloads verification
+2026-11-01
+
+Command: gradlew.bat testDebugUnitTest assembleDebug --continue --console=plain --max-workers=2
+Android compileSdk 35. BUILD SUCCESSFUL in 38s.
+JUnit: 25 total; 22 passed; 3 previously documented unsupported/device scenarios skipped; zero failures/errors.
+New tests cover safe filenames, copy size/SHA-256 rejection, progress bounds and measured-rate ETA.
+Existing real-loopback, chunk corruption, TTL, ACK, consent and bounded relay checks passed.
+
+UI: inset-aware scrolling with sticky CTA, obsidian/cyan/emerald tokens, bilingual identity,
+permissions accordion, azimuth radar with actual peer selection, hotspot settings sheet,
+live OS Wi-Fi/Location indicators, transfer HUD and persistent received-file history.
+Radar placement is illustrative, not measured bearing or distance. No 5 km/E2EE guarantee.
+Installed package version is displayed dynamically rather than a stale mockup version.
+
+Storage: only consented and SHA-verified endpoint files are copied to Downloads/SR-Mesh.
+Android 10+: pending MediaStore Downloads item; read-back verification before publishing.
+Android 8/9: runtime storage grant on Retry save, unique destination, narrow FileProvider root.
+Sender VERIFIED ACK continues to mean verified receiver cache; public-copy success is a separate UI state.
+Failed public export retains the verified cache for retry within the screen session.
+Saved file history survives relaunch. History entries for externally moved/deleted files can become stale.
+Relay paths do not invoke this storage layer.
+
+Not device-verified: actual OEM hotspot lifecycle, permission sheets, MediaStore and file-manager
+intents, screen/keyboard rendering at all font scales, or sustained frame rate. Native unit tests
+cannot establish zero UI regressions or 60 FPS. Folder launch uses a document-tree fallback when
+an OEM does not support direct folder viewing. In-progress exports are not a background service.
+Manual matrix: Android 8/9 permission denial -> Retry save; Android 10+ ZIP/MP4 receive, hash failure,
+low disk, duplicate name, open-file app absent, folder handler absent, keyboard open, 320dp width,
+large font, rotation, busy Wi-Fi, hotspot collision and return-from-settings.

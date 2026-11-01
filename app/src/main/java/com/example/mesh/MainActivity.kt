@@ -62,8 +62,8 @@ class MainActivity : ComponentActivity() {
                         val config by remote.config.state.collectAsStateWithLifecycle()
                         val controlsUi: @Composable () -> Unit = {
                             RemoteVersionControl(remote.config, remote.updates)
-                            TextButton(onClick = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(config.effective.webClientUrl))) }) {
-                                Text("Open web client / downloads")
+                            OutlinedButton(onClick = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(config.effective.webClientUrl))) }, modifier=Modifier.fillMaxWidth(), shape=androidx.compose.foundation.shape.RoundedCornerShape(50)) {
+                                Text("Web Gateway / Downloads • वेब गेटवे")
                             }
                         }
                         val profile = savedProfile

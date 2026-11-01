@@ -62,7 +62,7 @@ fun RemoteVersionControl(config: DynamicConfigManager, updates: AppUpdateManager
             taps++
             if (taps == 7) { taps = 0; showAdmin = false; showPin = true }
         }.padding(12.dp))
-    TextButton(onClick = { scope.launch { config.refresh(); updates.showPrompt() } }) { Text("Check for updates") }
+    OutlinedButton(onClick = { scope.launch { config.refresh(); updates.showPrompt() } }, modifier=Modifier.fillMaxWidth(), shape=androidx.compose.foundation.shape.RoundedCornerShape(50)) { Text("Check for Updates / अपडेट जाँचें") }
     if (showPin) AdminPinDialog(
         onDismiss = { showPin = false },
         onSubmit = { pin ->

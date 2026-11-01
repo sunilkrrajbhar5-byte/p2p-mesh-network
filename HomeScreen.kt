@@ -37,9 +37,11 @@ data class HomeUiState(
     val engineReady: Boolean = false,
     val signalFidelity: String = "Not reported",
     val relayMode: String = "Direct peer",
+    val wifiEnabled: Boolean = false,
+    val locationEnabled: Boolean = false,
 )
 
-private val HomeEmerald = Color(0xFF00FF87)
+private val HomeEmerald = Color(0xFF10B981)
 private val HomeAmber = Color(0xFFFFB300)
 
 /** No engine, permissions, receivers, or sockets are created by this screen. */
@@ -53,6 +55,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
     settingsContent: @Composable () -> Unit = {},
+    transferContent: @Composable () -> Unit = {},
     sessionContent: LazyListScope.() -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
@@ -63,11 +66,16 @@ fun HomeScreen(
     var logsOpen by rememberSaveable { mutableStateOf(false) }
     fun notice(message: String) { scope.launch { snackbar.showSnackbar(message) } }
     Scaffold(modifier = modifier.fillMaxSize().background(Brush.radialGradient(
-        listOf(Color(0xFF060B14), Color(0xFF020408)), radius = 1500f)),
+        listOf(Color(0xFF0B0F17), Color(0xFF020408)), radius = 1500f)),
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            Surface(Modifier.navigationBarsPadding().padding(horizontal=16.dp, vertical=10.dp),
+            Column(Modifier.navigationBarsPadding().imePadding().padding(horizontal=16.dp, vertical=6.dp), verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            if(tab=="Radar") MeshContinueButton(enabled=state.canConnect || state.peersList.any { it.connected }, onClick={
+                if(state.peersList.any { it.connected }) { tab="Chats"; onChat() }
+                else notice("Select a nearby peer / पास के डिवाइस पर Connect दबाएँ")
+            })
+            Surface(Modifier,
                 color=Color(0xF0121E30), shape=RoundedCornerShape(30.dp),
                 border=BorderStroke(1.dp,MeshCyan.copy(alpha=.22f)), shadowElevation=16.dp) {
                 Row(Modifier.fillMaxWidth().padding(6.dp)) {
@@ -83,9 +91,10 @@ fun HomeScreen(
                     }
                 }
             }
+            }
         }) { padding ->
-        LazyColumn(state=listState, modifier=Modifier.fillMaxSize().padding(padding).imePadding(),
-            contentPadding=PaddingValues(18.dp), verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        LazyColumn(state=listState, modifier=Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding(),
+            contentPadding=PaddingValues(14.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
             item("home-header") {
                 Row(verticalAlignment=Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -94,9 +103,10 @@ fun HomeScreen(
                             Text("SR MESH",fontSize=25.sp,fontWeight=FontWeight.ExtraBold,letterSpacing=2.sp,
                                 color=Color(0xFFE1FCFF),style=MaterialTheme.typography.titleLarge.copy(shadow=Shadow(MeshCyan,blurRadius=12f)))
                         }
+                        Text("बिना इंटरनेट की आज़ादी", color=MeshCyan, fontSize=11.sp)
                         Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                             HomePulse(state.engineReady,HomeEmerald)
-                            Text(if(state.engineReady) "Mesh Engine: Ready" else "Mesh Engine: Check status",fontSize=11.sp,
+                            Text(if(state.engineReady) "ACTIVE MESH • Direct P2P" else "MESH • Check status",fontSize=11.sp,
                                 color=if(state.engineReady) HomeEmerald else HomeAmber)
                         }
                     }
@@ -106,26 +116,18 @@ fun HomeScreen(
             }
             item("home-identity") {
                 HomeGlass {
-                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                        MeshMiniIcon("profile",MeshCyan,52)
+                    Row(Modifier.heightIn(min=52.dp), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        MeshMiniIcon("profile",MeshCyan,32)
                         Column(Modifier.weight(1f)) {
-                            Text("YOUR NODE / आपकी पहचान",color=MeshCyan,fontSize=10.sp,letterSpacing=1.sp)
-                            Text(state.myIdentity,fontWeight=FontWeight.Bold,fontSize=20.sp)
-                            Text("Local identity • On this device",color=Color(0xFF93A9C1),fontSize=11.sp)
+                            Text(state.myIdentity,fontWeight=FontWeight.Bold,fontSize=16.sp)
+                            Text("Saved on this device • इस डिवाइस पर सुरक्षित",color=Color(0xFF93A9C1),fontSize=10.sp)
                         }
-                        TextButton(onClick={
+                        IconButton(onClick={
                             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                                 .setPrimaryClip(ClipData.newPlainText("SR Mesh identity",state.myIdentity))
                             notice("Identity copied")
-                        }) { Text("Copy",fontSize=12.sp) }
-                    }
-                    HorizontalDivider(color=MeshCyan.copy(alpha=.12f))
-                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                        HomeMetric("Nearby Peers",state.peersList.size.toString(),Modifier.weight(1f))
-                        VerticalDivider(color=MeshCyan.copy(alpha=.15f))
-                        HomeMetric("Signal Fidelity",state.signalFidelity,Modifier.weight(1f))
-                        VerticalDivider(color=MeshCyan.copy(alpha=.15f))
-                        HomeMetric("Relay Mode",state.relayMode,Modifier.weight(1f))
+                        }, modifier=Modifier.semantics { contentDescription="Copy ID" }) { MeshMiniIcon("copy",MeshCyan,28) }
+                        IconButton(onClick={identityOpen=true}, modifier=Modifier.semantics { contentDescription="Share identity QR" }) { MeshMiniIcon("qr",HomeEmerald,28) }
                     }
                 }
             }
@@ -136,19 +138,25 @@ fun HomeScreen(
                     HomeTool("File Drop", "फ़ाइल शेयर", "bolt",HomeEmerald,Modifier.weight(1f),onFileDrop)
                 }
             }
+            item("home-transfer") { transferContent() }
             item("home-status") { MeshScanStatus(state.connectionStatus) }
             if(tab=="Radar") {
                 item("home-radar") {
                     HomeGlass {
                         Text("Discovered Devices / आस-पास के नोड्स",fontWeight=FontWeight.SemiBold)
-                        MeshRadarAnimation(state.isScanning)
+                        MeshRadarAnimation(state.isScanning, state.peersList, onConnect)
+                        Text("● Active Node: ${state.myIdentity} (You)",color=HomeEmerald,fontSize=11.sp)
+                        Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                            Text("● Wi-Fi", color=if(state.wifiEnabled) HomeEmerald else HomeAmber, fontSize=11.sp)
+                            Text("● Location", color=if(state.locationEnabled) HomeEmerald else HomeAmber, fontSize=11.sp)
+                        }
                         if(state.peersList.isEmpty()) {
                             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                                 HomePulse(state.isScanning,MeshCyan)
                                 Text(if(state.isScanning) "Scanning local Wi-Fi direct airspace..." else "Discovery paused • Check connection status",fontSize=12.sp,color=Color(0xFFABC1D5))
                             }
                         }
-                        FilledTonalButton(onClick=onSearch,enabled=state.canConnect) { Text("Search / खोजें") }
+                        MeshContinueButton(onClick=onSearch,enabled=state.canConnect,label="SCAN MESH AIRSPACE / खोजें")
                     }
                 }
                 items(state.peersList,key={"home-peer:${it.id}"}) { peer ->
@@ -173,7 +181,7 @@ fun HomeScreen(
                 Text("Mode: ${state.relayMode}")
                 Text("This dashboard owns direct peer sessions. Background bridge control is not connected here.",color=Color(0xFFABC1D5))
             } }
-            if(tab=="Settings") item("home-settings") { settingsContent() }
+            if(tab=="Settings" || tab=="Radar") item("home-settings") { settingsContent() }
             sessionContent()
         }
     }
@@ -186,7 +194,7 @@ fun HomeScreen(
 @Composable private fun HomeGlass(content: @Composable ColumnScope.() -> Unit) {
     Surface(Modifier.fillMaxWidth(),color=Color(0x85182438),shape=RoundedCornerShape(24.dp),
         border=BorderStroke(1.dp,Color(0x50304B6E)),shadowElevation=8.dp) {
-        Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(14.dp),content=content)
+        Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp),content=content)
     }
 }
 @Composable private fun HomeMetric(title:String,value:String,modifier:Modifier) {

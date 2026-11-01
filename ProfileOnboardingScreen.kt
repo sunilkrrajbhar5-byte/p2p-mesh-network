@@ -44,8 +44,22 @@ fun ProfileOnboardingScreen(
     var canNetwork by remember { mutableStateOf(false) }
     val cleanName = nickname.trim()
 
-    Column(modifier.fillMaxSize().meshBackdrop().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState())
-        .padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Scaffold(modifier=modifier.fillMaxSize().meshBackdrop(),containerColor=androidx.compose.ui.graphics.Color.Transparent,
+        bottomBar={ Column(Modifier.navigationBarsPadding().imePadding().padding(horizontal=18.dp,vertical=8.dp)) {
+        MeshContinueButton(onClick = {
+            val id = identity ?: return@MeshContinueButton
+            busy = true; error = null
+            scope.launch {
+                try { onContinue(id) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { error = "Could not open nearby devices. Please try again." }
+                finally { busy = false }
+            }
+        }, enabled = identity != null && canNetwork && !busy,
+            label = if (busy) "Please wait / कृपया प्रतीक्षा करें…" else "Continue / आगे बढ़ें →")
+        } }) { insets ->
+    Column(Modifier.fillMaxSize().padding(insets).consumeWindowInsets(insets).imePadding().verticalScroll(rememberScrollState())
+        .padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         MeshBrandHeader()
         if (identity == null) {
             OutlinedTextField(nickname, { nickname = it }, label = { Text("Nickname") },
@@ -69,18 +83,8 @@ fun ProfileOnboardingScreen(
         }
         MeshPermissionMatrix(enabled = !busy, onNetworkState = { canNetwork = it })
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        MeshContinueButton(onClick = {
-            val id = identity ?: return@MeshContinueButton
-            busy = true; error = null
-            scope.launch {
-                try { onContinue(id) }
-                catch (e: CancellationException) { throw e }
-                catch (_: Exception) { error = "Could not open nearby devices. Please try again." }
-                finally { busy = false }
-            }
-        }, enabled = identity != null && canNetwork && !busy,
-            label = if (busy) "Please wait / कृपया प्रतीक्षा करें…" else "Continue / आगे बढ़ें →")
         remoteControls?.invoke()
         MeshVersionTag()
+    }
     }
 }

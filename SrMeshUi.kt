@@ -14,7 +14,12 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -51,14 +56,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 internal val MeshCyan = Color(0xFF00F2FE)
-internal val MeshGreen = Color(0xFF42E6A4)
+internal val MeshGreen = Color(0xFF10B981)
 private val MeshBlue = Color(0xFF38BDF8)
 
 @Composable
 fun SrMeshTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = darkColorScheme(
         primary = MeshCyan, onPrimary = Color(0xFF06222C), secondary = MeshGreen,
-        background = Color(0xFF0A0F1D), surface = Color(0xFF111C2C),
+        background = Color(0xFF0B0F17), surface = Color(0xFF111C2C),
         surfaceVariant = Color(0xFF182638), onSurface = Color(0xFFE9F4FF),
         onSurfaceVariant = Color(0xFFABC1D5), outline = Color(0xFF36556A), error = Color(0xFFFFA0AB)),
         typography = Typography(
@@ -148,14 +153,25 @@ private fun IdentityActions(identity: String, onCopy: () -> Unit, onShare: () ->
 }
 
 @Composable
-internal fun MeshRadarAnimation(active: Boolean) {
+internal fun MeshRadarAnimation(active: Boolean, peers: List<HomePeerUi> = emptyList(), onPeer: (String) -> Unit = {}) {
     val phase = if(active) {
         val transition = rememberInfiniteTransition(label="Nearby radar")
         val value by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(3600, easing=LinearEasing)), label="Radar sweep")
         value
     } else 0f
-    Canvas(Modifier.fillMaxWidth().height(184.dp).semantics {contentDescription=if(active) "Nearby discovery radar; decorative scan markers" else "Radar paused"}) {
-        val r = size.minDimension * .46f
+    val anglePaint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(108, 167, 180); textAlign = android.graphics.Paint.Align.CENTER } }
+    Canvas(Modifier.fillMaxWidth().height(238.dp).pointerInput(peers) {
+        detectTapGestures { tap ->
+            val center = Offset(size.width/2f,size.height/2f)
+            val r = minOf(size.width,size.height)*.39f
+            peers.take(12).forEachIndexed { i, peer ->
+                val angle = (i*137.5-90)*Math.PI/180
+                val point = center + Offset(cos(angle).toFloat(),sin(angle).toFloat()) * (r*(.35f+(i%3)*.22f))
+                if((tap-point).getDistance() < 22.dp.toPx()) onPeer(peer.id)
+            }
+        }
+    }.semantics {contentDescription=if(active) "Nearby peers; positions are illustrative, not measured directions" else "Radar paused"}) {
+        val r = size.minDimension * .39f
         drawCircle(Brush.radialGradient(listOf(MeshCyan.copy(alpha=.12f), Color.Transparent), center, r), r)
         for (i in 1..6) drawCircle(MeshCyan.copy(alpha=if(i%2==0) .22f else .09f), r*i/6, style=Stroke(1.dp.toPx()))
         for (i in 0..7) {
@@ -168,26 +184,37 @@ internal fun MeshRadarAnimation(active: Boolean) {
                 center-Offset(r,r), Size(r*2,r*2))
             val a=phase*2*Math.PI
             drawLine(MeshCyan.copy(alpha=.7f), center, center+Offset(cos(a).toFloat()*r,sin(a).toFloat()*r), 1.dp.toPx())
-            // Scan accents are decorative, not a representation of discovered peers.
-            for(i in 0..2) {
-                val angle=a-i*1.3; val radius=r*(.35f+i*.23f)
-                val dot=center+Offset(cos(angle).toFloat()*radius,sin(angle).toFloat()*radius)
-                drawCircle(MeshCyan.copy(alpha=.1f), 7.dp.toPx(), dot)
-                drawCircle(MeshCyan.copy(alpha=.75f), 2.dp.toPx(), dot)
-            }
+        }
+        anglePaint.textSize = 9.sp.toPx()
+        for (degree in 0 until 360 step 30) {
+            val a = (degree - 90) * Math.PI / 180
+            val point = center + Offset(cos(a).toFloat(), sin(a).toFloat()) * (r + 15.dp.toPx())
+            drawContext.canvas.nativeCanvas.drawText("$degree°", point.x, point.y + 3.dp.toPx(), anglePaint)
+        }
+        peers.take(12).forEachIndexed { i, peer ->
+            val a = (i * 137.5 - 90) * Math.PI / 180
+            val radius = r * (.35f + (i % 3) * .22f)
+            val point = center + Offset(cos(a).toFloat(), sin(a).toFloat()) * radius
+            val tint = if(peer.connected) MeshGreen else MeshCyan
+            drawCircle(tint.copy(alpha=.12f), (6 + phase * 8).dp.toPx(), point)
+            drawCircle(tint, 3.dp.toPx(), point)
         }
         drawCircle(MeshCyan.copy(alpha=.14f), 11.dp.toPx())
         drawCircle(MeshCyan, 4.dp.toPx())
+    }
+    if(peers.isNotEmpty()) Text("Tap a peer • Positions illustrative",fontSize=10.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+    if(peers.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+        peers.take(12).forEach { peer -> AssistChip(onClick={onPeer(peer.id)}, label={Text(peer.name, fontSize=11.sp)}) }
     }
 }
 
 @Composable
 internal fun MeshContinueButton(enabled: Boolean, onClick: () -> Unit, label: String = "Continue / आगे बढ़ें →") {
     val brush = Brush.horizontalGradient(listOf(Color(0xFF81F7FF), MeshCyan, Color(0xFF2589FF)))
-    Button(onClick=onClick, enabled=enabled, modifier=Modifier.fillMaxWidth().heightIn(min=64.dp)
-        .shadow(if(enabled) 12.dp else 0.dp, RoundedCornerShape(20.dp), spotColor=MeshCyan.copy(alpha=.3f)).clip(RoundedCornerShape(20.dp)).border(1.dp, Color.White.copy(alpha=.3f), RoundedCornerShape(20.dp)).background(if(enabled) brush else Brush.horizontalGradient(listOf(Color(0xFF263544),Color(0xFF263544)))),
+    Button(onClick=onClick, enabled=enabled, modifier=Modifier.fillMaxWidth().heightIn(min=50.dp)
+        .shadow(if(enabled) 12.dp else 0.dp, RoundedCornerShape(14.dp), spotColor=MeshCyan.copy(alpha=.3f)).clip(RoundedCornerShape(14.dp)).border(1.dp, Color.White.copy(alpha=.3f), RoundedCornerShape(14.dp)).background(if(enabled) brush else Brush.horizontalGradient(listOf(Color(0xFF263544),Color(0xFF263544)))),
         colors=ButtonDefaults.buttonColors(containerColor=Color.Transparent,disabledContainerColor=Color.Transparent,contentColor=Color(0xFF06222C)),
-        contentPadding=PaddingValues(16.dp)) {Text(label, fontSize=18.sp, fontWeight=FontWeight.ExtraBold, textAlign=TextAlign.Center)}
+        contentPadding=PaddingValues(horizontal=14.dp,vertical=10.dp)) {Text(label, fontSize=15.sp, fontWeight=FontWeight.Bold, textAlign=TextAlign.Center)}
 }
 
 @Composable
@@ -198,7 +225,7 @@ internal fun MeshVersionTag() {
         val info=context.packageManager.getPackageInfo(context.packageName,0)
         @Suppress("DEPRECATION")
         val code=if(Build.VERSION.SDK_INT>=28) info.longVersionCode else info.versionCode.toLong()
-        "v${info.versionName} ($code) • SR Systems"
+        "v${info.versionName} (Build $code) • Local P2P • BY SR SYSTEMS"
     }
     Text(version, Modifier.fillMaxWidth().padding(vertical=8.dp), color=MaterialTheme.colorScheme.onSurfaceVariant,
         style=MaterialTheme.typography.bodySmall,textAlign=TextAlign.Center)
@@ -225,8 +252,16 @@ internal fun MeshPermissionMatrix(enabled: Boolean = true, onNetworkState: (Bool
     LaunchedEffect(networkGranted) {onNetworkState(networkGranted)}
     fun settings() {runCatching {context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))}
         .onFailure {Toast.makeText(context,"Open app permissions in Android Settings",Toast.LENGTH_SHORT).show()} }
+    val allowed = listOf(networkGranted, states[Manifest.permission.RECORD_AUDIO]==true, states[Manifest.permission.CAMERA]==true, notifications).count { it }
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(allowed) { expanded = allowed < 4 }
     MeshGlass {
-        Text("Permissions / अनुमतियाँ", style=MaterialTheme.typography.titleMedium)
+        TextButton(onClick={expanded=!expanded}, modifier=Modifier.fillMaxWidth()) {
+            MeshMiniIcon("settings", MeshGreen, 26)
+            Text("System Permissions: $allowed/4 Allowed ${if(allowed==4) "✓" else "• अनुमति दें"}", Modifier.weight(1f), fontSize=13.sp)
+            Text(if(expanded) "−" else "+")
+        }
+        AnimatedVisibility(expanded) { Column(verticalArrangement=Arrangement.spacedBy(10.dp)) {
         PermissionSwitch("Nearby Devices / आस-पास के डिवाइस",networkGranted,enabled) {if(networkGranted)settings() else request.launch(network)}
         PermissionSwitch("Microphone / माइक्रोफ़ोन",states[Manifest.permission.RECORD_AUDIO]==true,enabled) {if(states[Manifest.permission.RECORD_AUDIO]==true)settings() else request.launch(arrayOf(Manifest.permission.RECORD_AUDIO))}
         PermissionSwitch("Camera / कैमरा",states[Manifest.permission.CAMERA]==true,enabled) {if(states[Manifest.permission.CAMERA]==true)settings() else request.launch(arrayOf(Manifest.permission.CAMERA))}
@@ -234,6 +269,7 @@ internal fun MeshPermissionMatrix(enabled: Boolean = true, onNetworkState: (Bool
             if(Build.VERSION.SDK_INT>=33 && states[Manifest.permission.POST_NOTIFICATIONS]!=true) request.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS)) else settings()
         }
         TextButton(onClick=::settings,enabled=enabled) { MeshMiniIcon("settings", MeshCyan, 28); Spacer(Modifier.width(10.dp)); Text("Permission settings / सेटिंग्स") }
+        } }
     }
 }
 

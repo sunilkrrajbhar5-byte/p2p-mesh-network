@@ -40,6 +40,32 @@ class MeshEngine(context: Context, val localId: String) {
     val chat = textState.asStateFlow()
     private val progressState = MutableStateFlow<FileTransferUi?>(null)
     val transfer = progressState.asStateFlow()
+    val downloads = MeshDownloadStore(app)
+    private val savedState = MutableStateFlow<List<SavedMeshFile>>(emptyList())
+    val savedFiles = savedState.asStateFlow()
+    private val hudState = MutableStateFlow<TransferHudState?>(null)
+    val transferHud = hudState.asStateFlow()
+    private val retrySaves = ConcurrentHashMap<UUID, ChunkManager.Completed>()
+    private val receiveStarted = ConcurrentHashMap<UUID, Long>()
+    private var foreground = true
+    private var busyRetry: Job? = null
+    fun setForeground(visible: Boolean) { foreground = visible; if (!visible) { busyRetry?.cancel(); busyRetry = null } }
+    init { scope.launch(Dispatchers.IO) { savedState.value = downloads.history() } }
+    fun retrySaving() { scope.launch(Dispatchers.IO) { retrySaves.values.toList().forEach { publishDownload(it) } } }
+    private val saveLock = Mutex()
+    private suspend fun publishDownload(completed: ChunkManager.Completed) = saveLock.withLock {
+        if (savedState.value.any { it.id == completed.metadata.id.toString() }) return@withLock
+        val m = completed.metadata
+        retrySaves[m.id] = completed
+        hudState.value = TransferHudState(m.fileName, "${completed.sender} • Hop-1 Direct", m.size, m.size, "Verifying Downloads copy…")
+        try {
+            val saved = downloads.save(completed)
+            savedState.value = downloads.history()
+            retrySaves.remove(m.id); receiveStarted.remove(m.id)
+            hudState.value = TransferHudState(m.fileName, "${completed.sender} • SHA-256 verified", m.size, m.size, "Saved in Downloads > SR-Mesh", saved = saved)
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { hudState.value = TransferHudState(m.fileName, "Verified cache retained", m.size, m.size, "Could not save. Check storage / स्टोरेज जाँचें", failed = true, retrySaveAvailable = true) }
+    }
     private data class VoiceWait(val session: UUID, val peer: String, val result: CompletableDeferred<Boolean>)
     private data class VoiceGrant(val session: UUID, val peer: String, val stream: UUID, val expires: Long)
     private val voiceWaits = ConcurrentHashMap<UUID, VoiceWait>()
@@ -57,8 +83,16 @@ class MeshEngine(context: Context, val localId: String) {
     }
     private fun reportFailure(e: Exception) {
         statusState.value = e.message ?: "Connection failed"
-        if (e is NetworkResolutionException) resolutionState.value = e.resolution
-        else if (e !is RequestDeclinedException) notify(statusState.value)
+        if (e is NetworkResolutionException) {
+            busyRetry?.cancel(); busyRetry = null
+            resolutionState.value = e.resolution
+        }
+        else if (e is WifiBusyException) {
+            if (foreground && busyRetry?.isActive != true) busyRetry = scope.launch {
+                delay(8_000); busyRetry = null
+                if (foreground && connections.value.isEmpty()) refresh()
+            }
+        } else if (e !is RequestDeclinedException) notify(statusState.value)
     }
     fun start() { launchOperation { operation.withLock { if (transport == null) host() } } }
     fun refresh() { launchOperation { operation.withLock {
@@ -87,6 +121,7 @@ class MeshEngine(context: Context, val localId: String) {
                 try { manager.discoverIdentities() }
                 catch (e: CancellationException) { throw e }
                 catch (e: NetworkResolutionException) { reportFailure(e); break }
+                catch (e: WifiBusyException) { reportFailure(e); break }
                 catch (e: Exception) { statusState.value = e.message ?: "Discovery unavailable" }
                 delay(12_000)
             }
@@ -121,9 +156,21 @@ class MeshEngine(context: Context, val localId: String) {
                 val connection = manager.connections.value.singleOrNull { it.peerId == packet.targetId }
                     ?: throw IOException("Peer disconnected")
                 manager.sendAwait(connection.sessionId, packet)
+            }, onReceiveProgress = { metadata, peer, bytes ->
+                val start = receiveStarted.getOrPut(metadata.id) { SystemClock.elapsedRealtime() }
+                val seconds = (SystemClock.elapsedRealtime() - start).coerceAtLeast(1) / 1000.0
+                hudState.value = TransferHudState(metadata.fileName, peer, bytes, metadata.size,
+                    if (bytes == metadata.size) "Verifying SHA-256…" else "Receiving / प्राप्त हो रहा है", bytes / seconds)
+            }, onReceiveFailure = { metadata ->
+                receiveStarted.remove(metadata.id)
+                hudState.value = TransferHudState(metadata.fileName, "Receiver", 0, metadata.size,
+                    "Transfer interrupted or integrity check failed / दोबारा भेजें", failed=true)
             })
         ack = acknowledgements; chunks = files
         collectors = listOf(
+            scope.launch(Dispatchers.IO) { files.completed.collect { completed ->
+                completed.values.forEach { publishDownload(it) }
+            } },
             scope.launch { manager.nearby.collect { nearbyState.value = it } },
             scope.launch { manager.connections.collect { list ->
                 val removed = connectionsState.value.filter { old -> list.none { it.sessionId == old.sessionId } }
@@ -250,7 +297,14 @@ class MeshEngine(context: Context, val localId: String) {
     suspend fun sendFile(file: File, peer: String, displayName: String = file.name) {
         val manager = transport ?: throw IOException("Not connected")
         val files = chunks ?: throw IOException("Not connected")
-        try { sendChatFile(file, peer, manager.cluster.clusterId, files, displayName = displayName) { progressState.value = it } }
+        val started = SystemClock.elapsedRealtime()
+        try { sendChatFile(file, peer, manager.cluster.clusterId, files, displayName = displayName) {
+            progressState.value = it
+            val seconds = (SystemClock.elapsedRealtime() - started).coerceAtLeast(1) / 1000.0
+            hudState.value = TransferHudState(it.name, "$peer • Hop-1 Direct", it.sentBytes, it.totalBytes ?: 0,
+                if(it.phase == FileTransferPhase.DELIVERED) "Delivered • SHA-256 verified" else it.phase.name,
+                it.sentBytes/seconds, failed=it.phase == FileTransferPhase.FAILED)
+        } }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { notify(if (e.message == "Destination rejected transfer") "Request Declined" else e.message ?: "Transfer failed"); throw e }
     }

@@ -679,7 +679,7 @@ class WifiDirectManager(
                 if (epoch != hotspotEpoch || closed || !ready.isActive) return
                 val failure = if (reason == WifiManager.LocalOnlyHotspotCallback.ERROR_INCOMPATIBLE_MODE)
                     NetworkResolutionException(NetworkResolution.HOTSPOT)
-                else IOException("Local-only hotspot failed (Android reason $reason)")
+                else IOException("Hotspot unavailable / हॉटस्पॉट उपलब्ध नहीं है। Check Wi-Fi settings and retry.")
                 ready.completeExceptionally(failure)
             }
         }
@@ -829,7 +829,9 @@ class WifiDirectManager(
             invoke(object : WifiP2pManager.ActionListener {
                 override fun onSuccess() { if (continuation.isActive) continuation.resume(Unit) }
                 override fun onFailure(reason: Int) {
-                    if (continuation.isActive) continuation.resumeWithException(IOException("Wi-Fi Direct action failed ($reason)"))
+                    if (continuation.isActive) continuation.resumeWithException(
+                        if (reason == WifiP2pManager.BUSY) WifiBusyException()
+                        else IOException("Nearby discovery unavailable. Check Wi-Fi and permissions / Wi-Fi और अनुमतियाँ जाँचें"))
                 }
             })
         }

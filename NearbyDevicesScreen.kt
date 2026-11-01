@@ -51,6 +51,7 @@ fun IncomingConnectionDialog(controller: PeerConsentController) {
 }
 
 /** The visible screen owns radio/consent lifetime. Background requests fail closed. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit = {}) {
     val context = LocalContext.current
@@ -63,7 +64,12 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
     val resolution by engine.networkResolution.collectAsStateWithLifecycle()
     val settingsRetry = remember(engine) { NetworkSettingsRetry() }
     val chat by engine.chat.collectAsStateWithLifecycle()
-    val transfer by engine.transfer.collectAsStateWithLifecycle()
+    val hud by engine.transferHud.collectAsStateWithLifecycle()
+    val savedFiles by engine.savedFiles.collectAsStateWithLifecycle()
+    var folderOpen by remember { mutableStateOf(false) }
+    var wifiEnabled by remember { mutableStateOf(false) }
+    var locationEnabled by remember { mutableStateOf(false) }
+    val legacyStorage = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if(granted) engine.retrySaving() }
     var selected by remember { mutableStateOf<String?>(null) }
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
@@ -76,6 +82,10 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
         fun update() {
             resumed = owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
             engine.consent.setUiVisible(resumed)
+            engine.setForeground(resumed)
+            wifiEnabled = (context.applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager).isWifiEnabled
+            val location = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+            locationEnabled = if(android.os.Build.VERSION.SDK_INT >= 28) location.isLocationEnabled else location.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) || location.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
             networkGranted = WifiDirectManager.requiredPermissions().all { context.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
         }
         val observer = LifecycleEventObserver { _, event ->
@@ -83,8 +93,15 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
             if (event == Lifecycle.Event.ON_PAUSE) settingsRetry.paused()
             if (event == Lifecycle.Event.ON_RESUME && settingsRetry.resumed()) engine.refresh()
         }
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, intent: Intent?) { update() }
+        }
+        androidx.core.content.ContextCompat.registerReceiver(context, receiver, android.content.IntentFilter().apply {
+            addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION)
+            addAction(android.location.LocationManager.MODE_CHANGED_ACTION)
+        }, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         owner.lifecycle.addObserver(observer); update(); engine.start()
-        onDispose { owner.lifecycle.removeObserver(observer); engine.shutdown() }
+        onDispose { context.unregisterReceiver(receiver); owner.lifecycle.removeObserver(observer); engine.shutdown() }
     }
     LaunchedEffect(engine) { engine.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() } }
     LaunchedEffect(connections, resumed) {
@@ -127,6 +144,7 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
         }
     }
     val homeState = HomeUiState(
+        wifiEnabled = wifiEnabled, locationEnabled = locationEnabled,
         myIdentity = identity,
         peersList = connections.map { HomePeerUi(it.peerId, it.peerId, connected = true) } +
             nearby.filter { peer -> connections.none { it.peerId == peer.identity } }
@@ -153,13 +171,22 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
             if (selected != null && !sending) picker.launch(arrayOf("*/*"))
             else engine.notify(if(sending) "File transfer is already running" else "Select a connected peer first")
         },
+        transferContent = { hud?.let { value ->
+            TransferHud(value, engine.downloads::openFile, engine.downloads::openFolder) {
+                if(android.os.Build.VERSION.SDK_INT <= 28 && context.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    legacyStorage.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                else engine.retrySaving()
+            }
+        } },
         settingsContent = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 MeshPermissionMatrix(onNetworkState = { networkGranted = it })
                 remoteControls()
-                MeshVersionTag()
             }
         }) {
+        item("downloads-folder") {
+            OutlinedButton(onClick={folderOpen=true},modifier=Modifier.fillMaxWidth()) { Text("SR-Mesh Downloads / प्राप्त फ़ाइलें (${savedFiles.size})") }
+        }
         item("gateway") { ActiveGatewayCard(identity) }
         if (connections.isNotEmpty()) item("disconnect") {
             TextButton(onClick = engine::disconnect) { Text("Disconnect / कनेक्शन बंद करें") }
@@ -173,7 +200,9 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
                     onReject = { engine.consent.decide(request.id, false) })
             }
         }
-        items(chat) { Text(it) }
+        items(chat) { message -> Surface(shape=androidx.compose.foundation.shape.RoundedCornerShape(18.dp), color=Color(0x85182438), border=androidx.compose.foundation.BorderStroke(1.dp,MeshCyan.copy(alpha=.18f))) {
+            Text(message,Modifier.fillMaxWidth().padding(14.dp),style=MaterialTheme.typography.bodyMedium)
+        } }
         item("composer") {
         if (showComposer) selected?.let { peer ->
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -193,20 +222,28 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
         }
             }
         }
-        item("transfer") { transfer?.let { value ->
-            LinearProgressIndicator(progress = { value.fraction }, modifier = Modifier.fillMaxWidth())
-            Text("${value.name}: ${displayBytes(value.sentBytes)} · ${value.phase}")
-        }
-        }
         item("version") { MeshVersionTag() }
+    }
+    if(folderOpen) ModalBottomSheet(onDismissRequest={folderOpen=false},containerColor=Color(0xFF101C2A)) {
+        LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.8f),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            item { Text("SR-Mesh Folder / डाउनलोड",style=MaterialTheme.typography.titleLarge,color=MeshCyan) }
+            item { Text("Internal Storage > Downloads > SR-Mesh",style=MaterialTheme.typography.bodySmall) }
+            item { OutlinedButton(onClick=engine.downloads::openFolder) { Text("Open system file manager / फ़ाइल मैनेजर") } }
+            if(savedFiles.isEmpty()) item { Text("No received files yet / अभी कोई फ़ाइल नहीं") }
+            items(savedFiles,key={it.id}) { file -> MeshGlass {
+                Text(file.name)
+                Text(displayBytes(file.size),style=MaterialTheme.typography.bodySmall)
+                TextButton(onClick={engine.downloads.openFile(file)}) { Text("OPEN / खोलें") }
+            } }
+        }
     }
     if (resolution == null) IncomingConnectionDialog(engine.consent)
     if (resumed) resolution?.let { issue ->
-        AlertDialog(
-            onDismissRequest = engine::dismissNetworkResolution,
-            title = { Text(issue.title) },
-            text = { Text(issue.description) },
-            confirmButton = { TextButton(onClick = {
+        ModalBottomSheet(onDismissRequest=engine::dismissNetworkResolution, containerColor=Color(0xFF101C2A)) {
+            Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            Text(issue.title,style=MaterialTheme.typography.titleLarge,color=MeshCyan)
+            Text(issue.description)
+            MeshContinueButton(enabled=true, label="सेटिंग्स खोलें (Open Settings)", onClick = {
                 val action = when (issue) {
                     NetworkResolution.HOTSPOT -> "android.settings.TETHER_SETTINGS"
                     NetworkResolution.WIFI -> Settings.ACTION_WIFI_SETTINGS
@@ -224,11 +261,10 @@ fun NearbyDevicesScreen(identity: String, remoteControls: @Composable () -> Unit
                     settingsRetry.opened()
                     engine.dismissNetworkResolution()
                 } else Toast.makeText(context, "Settings नहीं खुलीं। फ़ोन की Settings खोलें।", Toast.LENGTH_LONG).show()
-            }) { Text("सेटिंग्स खोलें (Open Settings)") } },
-            dismissButton = { TextButton(onClick = engine::dismissNetworkResolution) {
-                Text("रद्द करें (Cancel)")
-            } }
-        )
+            })
+            TextButton(onClick=engine::dismissNetworkResolution,modifier=Modifier.fillMaxWidth()) { Text("रद्द करें (Cancel)") }
+            }
+        }
     }
 }
 

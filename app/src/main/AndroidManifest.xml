@@ -1,6 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
   <uses-feature android:name="android.hardware.camera.any" android:required="false" />
   <uses-feature android:name="android.hardware.microphone" android:required="false" />
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -24,6 +25,9 @@
     <service android:name="com.example.mesh.SilentRelayService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="connectedDevice" />
     <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true">
       <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/mesh_update_paths" />
+    </provider>
+    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.downloads" android:exported="false" android:grantUriPermissions="true">
+      <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/mesh_download_paths" />
     </provider>
     <activity android:name=".MainActivity" android:exported="true">
       <intent-filter>
