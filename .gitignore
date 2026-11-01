@@ -19,3 +19,5 @@ docs/downloads/builder-*.yml
 docs/downloads/*.blockmap
 docs/downloads/*.exe
 docs/downloads/*.sha256
+
+desktop-client/node_modules/
