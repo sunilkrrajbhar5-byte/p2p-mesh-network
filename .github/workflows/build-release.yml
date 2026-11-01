@@ -61,10 +61,25 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           if [ "${{ inputs.verify_only }}" = "true" ]; then
-            bash ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:assembleRelease
+            bash ./gradlew --no-daemon testDebugUnitTest --continue
+            bash ./gradlew --no-daemon testDebugUnitTest assembleRelease --dry-run
+            bash ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease
           else
             bash ./gradlew --no-daemon :app:assembleRelease
           fi
+      - name: Web portal verification
+        if: ${{ inputs.verify_only && !cancelled() }}
+        run: node --test scripts/comprehensive-web.test.mjs scripts/landing-stats.test.mjs scripts/github-portal.test.mjs scripts/github-stats.test.mjs scripts/gateway-helpers.test.mjs
+      - name: Retain test reports
+        if: ${{ always() && inputs.verify_only }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: SR-Mesh-verification-reports
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+          if-no-files-found: warn
+          retention-days: 14
       - name: Verify signed release APK
         run: |
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/SR-Mesh.apk"

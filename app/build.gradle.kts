@@ -57,6 +57,8 @@ android {
 }
 tasks.named("preBuild") { dependsOn(copyMeshSources, copyMeshAssets) }
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     implementation(platform("androidx.compose:compose-bom:2025.04.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -91,4 +93,28 @@ tasks.register("validateReleaseSigning") {
 }
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     dependsOn("validateReleaseSigning")
+}
+
+// Reuse executable protocol regression checks inside the JUnit master suite.
+val generatedVerification = layout.buildDirectory.dir("generated/verificationSources")
+val prepareVerificationChecks by tasks.registering {
+    val checks = listOf("MeshPacketChecks", "Step2Checks", "Step3Checks", "Step4Checks",
+        "Step5Checks", "Step6Checks", "ConsentChecks", "GatewayRelayChecks")
+    inputs.files(checks.map { rootProject.file("$it.kt") })
+    outputs.dir(generatedVerification)
+    doLast {
+        val output = generatedVerification.get().asFile.apply { mkdirs() }
+        checks.forEach { name ->
+            output.resolve("$name.kt").writeText(rootProject.file("$name.kt").readText()
+                .replace("fun main(", "fun run${name}("))
+        }
+    }
+}
+android.sourceSets.getByName("test").java.srcDir(generatedVerification)
+tasks.matching { it.name.startsWith("compile") && it.name.contains("UnitTest") }.configureEach {
+    dependsOn(prepareVerificationChecks)
+}
+tasks.withType<Test>().configureEach {
+    maxHeapSize = "1536m"
+    testLogging { events("passed", "skipped", "failed"); showStandardStreams = true }
 }
